@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+    <title>Black Lime</title>
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+                <span></span>
+                <span></span>
+            </div>
+            <span class="brand-name">BLACK<span>LIME</span></span>
+            <button class="sidebar-collapse-button" id="sidebarCollapseButton" type="button" aria-label="Minimizar barra lateral" aria-expanded="true" title="Minimizar barra lateral">
+                <span id="sidebarCollapseIcon" aria-hidden="true">&times;</span>
+            </button>
+        </div>
+
+        <nav class="navigation" aria-label="Navegação principal">
+            <a class="nav-item" href="index.html" data-page="inicio" aria-label="Visão geral" title="Visão geral">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10M9 19.5v-6h6v6"/></svg>
+                <span>Visão geral</span>
+            </a>
+            <a class="nav-item" href="index.html?pagina=equipe" data-page="equipe" aria-label="Equipe" title="Equipe">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M3 19c.5-4 2.5-6 6-6s5.5 2 6 6m1-5c3 0 4.5 1.5 5 4"/></svg>
+                <span>Equipe</span>
+            </a>
+            <a class="nav-item" href="index.html?pagina=mensagens" data-page="mensagens" aria-label="Mensagens" title="Mensagens">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                <span>Mensagens</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <a class="nav-item" href="index.html?pagina=configuracoes" data-page="configuracoes" aria-label="Configurações" title="Configurações">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-2.6V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L7.6 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 6.4 14h-.2v-2.6h.2A1.7 1.7 0 0 0 8 10.4a1.7 1.7 0 0 0-.3-1.9L7.6 8l1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 12.4 5v-.2H15V5a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2V14H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+                <span>Configurações</span>
+            </a>
+            <a class="profile profile-link" href="index.html?pagina=perfil" aria-label="Abrir perfil de Nohan Silva" title="Perfil de Nohan Silva">
+                <div class="avatar" id="sidebarProfileAvatar">NS</div>
+                <div class="profile-copy">
+                    <strong id="sidebarProfileName">Nohan Silva</strong>
+                    <span id="sidebarProfileRole">Dono</span>
+                </div>
+            </a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="menu-button" id="menuButton" type="button" aria-label="Abrir menu" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div>
+                <p class="eyebrow" id="pageEyebrow">PAINEL DE CONTROLE</p>
+                <h1 id="pageTitle">Visão geral</h1>
+            </div>
+            <div class="topbar-actions">
+                <button class="icon-button" type="button" aria-label="Notificações">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
+                    <span class="notification-dot"></span>
+                </button>
+                <button class="primary-button" id="createTeamButton" type="button">
+                    <span aria-hidden="true">+</span> Adicionar mensagem
+                </button>
+            </div>
+        </header>
+
+        <div id="pageContent">
+            <section class="panel owner-announcement" aria-label="Mensagem da empresa">
+                <h2>Olá a todos! Este site foi feito para empresas.</h2>
+                <p class="owner-announcement-copy">Use o site com responsabilidade na sua empresa.</p>
+            </section>
+            <section class="panel owner-message-form-panel" id="ownerMessageFormPanel" hidden>
+                <div class="panel-header">
+                    <div><p class="panel-kicker">NOVO COMUNICADO</p><h2>Adicionar mensagem</h2></div>
+                    <button class="close-form-button" id="closeOwnerMessageForm" type="button" aria-label="Fechar formulário de mensagem">&times;</button>
+                </div>
+                <form class="owner-message-form" id="ownerMessageForm">
+                    <label for="ownerMessageText">Mensagem do dono da empresa</label>
+                    <textarea id="ownerMessageText" name="message" rows="4" maxlength="500" required></textarea>
+                    <button class="primary-button" type="submit">Publicar mensagem</button>
+                </form>
+            </section>
+            <p class="owner-message-status" id="ownerMessageStatus" role="status" aria-live="polite"></p>
+            <p class="message-retention-note">As mensagens são excluídas automaticamente 24 horas após a publicação.</p>
+            <section class="owner-message-list" id="ownerMessageList" aria-label="Mensagens publicadas pelo dono"></section>
+        </div>
+    </main>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+</body>
+</html>
