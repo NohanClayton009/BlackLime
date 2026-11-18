@@ -31,6 +31,40 @@ try {
 }
 applyTheme(savedTheme);
 
+const messageEditDialog = document.querySelector("#messageEditDialog");
+const messageEditForm = document.querySelector("#messageEditForm");
+const messageEditText = document.querySelector("#messageEditText");
+const messageEditStatus = document.querySelector("#messageEditStatus");
+let saveEditedMessage = null;
+
+function openMessageEditor(message, onSave) {
+    messageEditText.value = message;
+    messageEditStatus.textContent = "";
+    saveEditedMessage = onSave;
+    messageEditDialog.showModal();
+    messageEditText.focus();
+}
+
+messageEditForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const updatedText = messageEditText.value.trim();
+    if (!updatedText) {
+        messageEditStatus.textContent = "Escreva uma mensagem antes de salvar.";
+        messageEditText.focus();
+        return;
+    }
+
+    if (saveEditedMessage && saveEditedMessage(updatedText)) {
+        messageEditDialog.close();
+        saveEditedMessage = null;
+    }
+});
+
+document.querySelector("#cancelMessageEdit").addEventListener("click", () => {
+    messageEditDialog.close();
+    saveEditedMessage = null;
+});
+
 function prepareExpiringMessages(savedMessages) {
     if (!Array.isArray(savedMessages)) {
         throw new Error("As mensagens salvas estão em um formato inválido.");
@@ -869,7 +903,7 @@ if (ownerMessageForm) {
     function renderOwnerMessages() {
         ownerMessageList.replaceChildren();
 
-        ownerMessages.forEach((message) => {
+        ownerMessages.forEach((message, messageIndex) => {
             const card = document.createElement("article");
             card.className = "panel owner-message-card";
 
@@ -881,7 +915,68 @@ if (ownerMessageForm) {
             text.className = "owner-message-text";
             text.textContent = message.text;
 
-            card.append(label, text);
+            const actions = document.createElement("details");
+            actions.className = "message-actions-menu";
+
+            const menuButton = document.createElement("summary");
+            menuButton.className = "message-actions-button";
+            menuButton.setAttribute("aria-label", "Opções da mensagem");
+            menuButton.textContent = "•••";
+
+            const menu = document.createElement("div");
+            menu.className = "message-actions-options";
+
+            const deleteButton = document.createElement("button");
+            deleteButton.className = "owner-message-delete";
+            deleteButton.type = "button";
+            deleteButton.textContent = "Excluir";
+            deleteButton.setAttribute("aria-label", "Excluir mensagem publicada");
+            deleteButton.addEventListener("click", () => {
+                ownerMessages = ownerMessages.filter((_, index) => index !== messageIndex);
+
+                try {
+                    localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
+                } catch (error) {
+                    ownerMessageStatus.textContent = "Não foi possível excluir a mensagem.";
+                    console.error("Falha ao excluir um comunicado do dono.", error);
+                    return;
+                }
+
+                renderOwnerMessages();
+                scheduleOwnerMessageExpiry();
+                ownerMessageStatus.textContent = "Mensagem excluída.";
+            });
+
+            const editButton = document.createElement("button");
+            editButton.className = "owner-message-delete";
+            editButton.type = "button";
+            editButton.textContent = "Editar";
+            editButton.setAttribute("aria-label", "Editar mensagem publicada");
+            editButton.addEventListener("click", () => {
+                openMessageEditor(ownerMessages[messageIndex].text, (updatedText) => {
+                    ownerMessages = ownerMessages.map((savedMessage, index) =>
+                        index === messageIndex ? { ...savedMessage, text: updatedText } : savedMessage
+                    );
+
+                    try {
+                        localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
+                    } catch (error) {
+                        ownerMessageStatus.textContent = "Não foi possível editar a mensagem.";
+                        console.error("Falha ao editar um comunicado do dono.", error);
+                        return false;
+                    }
+
+                    renderOwnerMessages();
+                    ownerMessageStatus.textContent = "Mensagem editada.";
+                    return true;
+                });
+            });
+
+            menu.append(deleteButton, editButton);
+
+            actions.append(menuButton, menu);
+
+            card.append(label, text, actions);
             ownerMessageList.append(card);
         });
     }
@@ -987,6 +1082,7 @@ if (teamConversationList) {
     const chatInput = chatForm.elements.message;
     let teams = [];
     let deleteChatMessage = () => {};
+    let editChatMessage = () => {};
     const canDeleteChatMessages = !profileSettingsError &&
         (savedProfileSettings.position || DEFAULT_PROFILE_ROLE) === "Dono";
 
@@ -1007,13 +1103,35 @@ if (teamConversationList) {
             bubble.append(sender, text);
 
             if (canDeleteChatMessages) {
+                const actions = document.createElement("details");
+                actions.className = "message-actions-menu";
+
+                const menuButton = document.createElement("summary");
+                menuButton.className = "message-actions-button";
+                menuButton.setAttribute("aria-label", "Opções da mensagem");
+                menuButton.textContent = "•••";
+
+                const menu = document.createElement("div");
+                menu.className = "message-actions-options";
+
                 const deleteButton = document.createElement("button");
                 deleteButton.className = "chat-message-delete";
                 deleteButton.type = "button";
                 deleteButton.textContent = "Excluir";
                 deleteButton.setAttribute("aria-label", "Excluir esta mensagem");
                 deleteButton.addEventListener("click", () => deleteChatMessage(messageIndex));
-                bubble.append(deleteButton);
+
+                const editButton = document.createElement("button");
+                editButton.className = "chat-message-delete";
+                editButton.type = "button";
+                editButton.textContent = "Editar";
+                editButton.setAttribute("aria-label", "Editar esta mensagem");
+                editButton.addEventListener("click", () => editChatMessage(messageIndex));
+
+                menu.append(deleteButton, editButton);
+
+                actions.append(menuButton, menu);
+                bubble.append(actions);
             }
 
             chatMessages.append(bubble);
@@ -1098,9 +1216,6 @@ if (teamConversationList) {
                 chatStatus.textContent = "Não é possível excluir mensagens neste navegador.";
                 return;
             }
-            if (!window.confirm("Tem certeza que deseja excluir esta mensagem?")) {
-                return;
-            }
 
             const updatedMessages = messages.filter((_, index) => index !== messageIndex);
             const updatedConversations = { ...allConversations, [selectedTeam.name]: updatedMessages };
@@ -1117,6 +1232,33 @@ if (teamConversationList) {
             renderChatMessages(messages);
             scheduleChatMessageExpiry();
             chatStatus.textContent = "Mensagem excluída.";
+        };
+
+        editChatMessage = (messageIndex) => {
+            if (!chatStorageAvailable) {
+                chatStatus.textContent = "Não é possível editar mensagens neste navegador.";
+                return;
+            }
+
+            openMessageEditor(messages[messageIndex].text, (updatedText) => {
+                const updatedMessages = messages.map((savedMessage, index) =>
+                    index === messageIndex ? { ...savedMessage, text: updatedText } : savedMessage
+                );
+                const updatedConversations = { ...allConversations, [selectedTeam.name]: updatedMessages };
+                try {
+                    localStorage.setItem(conversationKey, JSON.stringify(updatedConversations));
+                } catch (error) {
+                    chatStatus.textContent = "Não foi possível editar a mensagem neste navegador.";
+                    console.error("Falha ao editar uma mensagem da conversa.", error);
+                    return false;
+                }
+
+                allConversations = updatedConversations;
+                messages = updatedMessages;
+                renderChatMessages(messages);
+                chatStatus.textContent = "Mensagem editada.";
+                return true;
+            });
         };
 
         try {
