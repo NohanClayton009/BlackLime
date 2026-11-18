@@ -8,6 +8,28 @@ const pageTitle = document.querySelector("#pageTitle");
 const pageEyebrow = document.querySelector("#pageEyebrow");
 const MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROFILE_ROLE = "Dono";
+const THEME_STORAGE_KEY = "blacklime-theme";
+
+function applyTheme(theme) {
+    const selectedTheme = theme === "light" ? "light" : "dark";
+    document.body.dataset.theme = selectedTheme;
+    const themeToggle = document.querySelector("#profileThemeToggle");
+    if (themeToggle) {
+        const isLight = selectedTheme === "light";
+        themeToggle.setAttribute("aria-pressed", String(isLight));
+        themeToggle.setAttribute("aria-label", isLight ? "Ativar tema escuro" : "Ativar tema claro");
+        themeToggle.querySelector(".theme-toggle-label").textContent = isLight ? "Claro" : "Escuro";
+        themeToggle.querySelector(".theme-toggle-icon").textContent = isLight ? "\u2600" : "\u25cf";
+    }
+}
+
+let savedTheme = "dark";
+try {
+    savedTheme = localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+} catch (error) {
+    console.error("Falha ao carregar o tema salvo.", error);
+}
+applyTheme(savedTheme);
 
 function prepareExpiringMessages(savedMessages) {
     if (!Array.isArray(savedMessages)) {
@@ -67,6 +89,43 @@ function updateSidebarProfile(nameValue, roleValue) {
 }
 
 const pages = {
+    empresa: {
+        title: "Sobre a empresa",
+        eyebrow: "BLACK LIME",
+        content: `
+            <section class="company-hero" aria-labelledby="companyName">
+                <div>
+                    <p class="panel-kicker">QUEM SOMOS</p>
+                    <h2 id="companyName">Black Lime</h2>
+                    <p>A Black Lime é uma empresa criada para conectar pessoas, organizar equipes e transformar ideias em projetos com mais clareza e colaboração.</p>
+                </div>
+                <div class="company-hero-mark" aria-hidden="true">
+                    <div class="brand-mark"><span></span><span></span></div>
+                </div>
+            </section>
+            <section class="company-content-grid" aria-label="Informações da empresa">
+                <article class="panel company-info-card">
+                    <p class="panel-kicker">NOSSA MISSÃO</p>
+                    <h2>Facilitar o trabalho em equipe</h2>
+                    <p>Oferecer uma experiência simples para comunicação, gestão de pessoas e acompanhamento das atividades da empresa.</p>
+                </article>
+                <article class="panel company-info-card">
+                    <p class="panel-kicker">NOSSOS VALORES</p>
+                    <h2>Colaboração e responsabilidade</h2>
+                    <ul class="company-values">
+                        <li>Comunicação clara</li>
+                        <li>Trabalho em equipe</li>
+                        <li>Respeito e confiança</li>
+                        <li>Foco em resultados</li>
+                    </ul>
+                </article>
+                <article class="panel company-info-card company-info-wide">
+                    <p class="panel-kicker">NOSSA PROPOSTA</p>
+                    <h2>Um ambiente digital para crescer juntos</h2>
+                    <p>Centralizamos comunicados, equipes e conversas em um único espaço, ajudando cada pessoa a entender prioridades e participar das decisões.</p>
+                </article>
+            </section>`
+    },
     analises: {
         title: "Análises",
         eyebrow: "DADOS E DESEMPENHO",
@@ -206,6 +265,10 @@ const pages = {
                         <p id="profilePageEmail">nohan@example.com</p>
                         <span class="profile-role" id="profilePageRole">Dono</span>
                     </div>
+                    <button class="theme-toggle" id="profileThemeToggle" type="button" aria-label="Ativar tema claro" aria-pressed="false">
+                        <span class="theme-toggle-icon" aria-hidden="true">&#9679;</span>
+                        <span class="theme-toggle-label">Escuro</span>
+                    </button>
                 </article>
                 <section class="panel profile-info-panel">
                     <div class="panel-header">
@@ -216,7 +279,7 @@ const pages = {
                         <div><dt>Nome completo</dt><dd id="profileDetailName">Nohan Silva</dd></div>
                         <div><dt>E-mail</dt><dd id="profileDetailEmail">nohan@example.com</dd></div>
                         <div><dt>Cargo</dt><dd id="profileDetailRole">Dono</dd></div>
-                        <div><dt>Idioma</dt><dd id="profileDetailLanguage">Português (Brasil)</dd></div>
+                        <div><dt>Empresa</dt><dd><a class="profile-company-link" id="profileDetailCompany" href="index.html?pagina=empresa">Black Lime</a></dd></div>
                     </dl>
                     <a class="secondary-button profile-owner-link" id="profileOwnerLink" href="index.html?pagina=dono" hidden>Abrir página do Dono</a>
                     <p class="profile-page-status" id="profilePageStatus" role="status" aria-live="polite"></p>
@@ -232,7 +295,7 @@ const pages = {
                     <label>Nome completo<input type="text" name="name" value="Nohan Silva"></label>
                     <label>E-mail<input type="email" name="email" value="nohan@example.com"></label>
                     <label>Cargo<select name="position"><option>Dono</option><option>Administrador</option><option>Colaborador</option></select></label>
-                    <label>Idioma<select name="language"><option>Português (Brasil)</option><option>English</option></select></label>
+                    <label>Empresa<input type="text" name="company" value="Black Lime"></label>
                     <button class="primary-button" type="submit">Salvar alterações</button>
                     <p class="form-status" role="status" aria-live="polite"></p>
                 </form>
@@ -243,6 +306,10 @@ const pages = {
 const currentPage = new URLSearchParams(window.location.search).get("pagina") || "inicio";
 const page = pages[currentPage];
 const createTeamButton = document.querySelector("#createTeamButton");
+
+if (createTeamButton && currentPage === "empresa") {
+    createTeamButton.hidden = true;
+}
 
 if (createTeamButton && currentPage !== "inicio") {
     createTeamButton.lastChild.textContent = currentPage === "dono" ? " Criar mensagem" : " Criar equipe";
@@ -280,9 +347,9 @@ if (profilePageName) {
         const email = typeof savedProfileSettings.email === "string" && savedProfileSettings.email.trim()
             ? savedProfileSettings.email.trim()
             : "nohan@example.com";
-        const language = typeof savedProfileSettings.language === "string" && savedProfileSettings.language.trim()
-            ? savedProfileSettings.language.trim()
-            : "Português (Brasil)";
+        const company = typeof savedProfileSettings.company === "string" && savedProfileSettings.company.trim()
+            ? savedProfileSettings.company.trim()
+            : "Black Lime";
         const role = typeof savedProfileSettings.position === "string" && savedProfileSettings.position.trim()
             ? savedProfileSettings.position.trim()
             : DEFAULT_PROFILE_ROLE;
@@ -295,9 +362,23 @@ if (profilePageName) {
         document.querySelector("#profileDetailName").textContent = name;
         document.querySelector("#profileDetailEmail").textContent = email;
         document.querySelector("#profileDetailRole").textContent = role;
-        document.querySelector("#profileDetailLanguage").textContent = language;
+        document.querySelector("#profileDetailCompany").textContent = company;
         document.querySelector("#profileOwnerLink").hidden = role !== "Dono";
     }
+}
+
+const profileThemeToggle = document.querySelector("#profileThemeToggle");
+if (profileThemeToggle) {
+    applyTheme(savedTheme);
+    profileThemeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.dataset.theme === "light" ? "dark" : "light";
+        applyTheme(nextTheme);
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        } catch (error) {
+            console.error("Falha ao salvar o tema.", error);
+        }
+    });
 }
 
 const ownerPageGreeting = document.querySelector("#ownerPageGreeting");

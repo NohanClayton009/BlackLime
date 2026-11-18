@@ -25,6 +25,37 @@ body {
     font-family: "DM Sans", sans-serif;
 }
 
+body[data-theme="light"] {
+    --black: #edf0e9;
+    --panel: #ffffff;
+    --panel-2: #f4f6f1;
+    --border: #d6dbd1;
+    --muted: #686e66;
+    --text: #171917;
+}
+
+body[data-theme="light"] .sidebar,
+body[data-theme="light"] .sidebar-collapse-button,
+body[data-theme="light"] .icon-button,
+body[data-theme="light"] .menu-button,
+body[data-theme="light"] .profile-details-list > div,
+body[data-theme="light"] .settings-form input,
+body[data-theme="light"] .settings-form select,
+body[data-theme="light"] .team-form input,
+body[data-theme="light"] .team-form select,
+body[data-theme="light"] .team-chat-form input {
+    background: var(--panel);
+}
+
+body[data-theme="light"] .nav-item {
+    color: #676c65;
+}
+
+body[data-theme="light"] .nav-item:hover,
+body[data-theme="light"] .nav-item.active {
+    color: #42551f;
+}
+
 button,
 a {
     font: inherit;
@@ -358,10 +389,40 @@ a {
 }
 
 .profile-summary {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 22px;
     padding: 26px;
+}
+
+.theme-toggle {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 180ms ease;
+}
+
+.theme-toggle:hover {
+    border-color: var(--lime);
+    color: var(--lime);
+}
+
+.theme-toggle-icon {
+    color: var(--lime);
+    font-size: 14px;
 }
 
 .profile-page-avatar {
@@ -443,6 +504,15 @@ a {
     overflow-wrap: anywhere;
     font-size: 14px;
     font-weight: 600;
+}
+
+.profile-company-link {
+    color: var(--lime);
+    text-decoration: none;
+}
+
+.profile-company-link:hover {
+    text-decoration: underline;
 }
 
 .profile-page-status {
@@ -914,6 +984,85 @@ h1 {
     color: var(--muted);
     font-size: 15px;
     line-height: 1.6;
+}
+
+.company-hero {
+    min-height: 280px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    align-items: center;
+    gap: 32px;
+    margin-top: 28px;
+    padding: 42px;
+    border: 1px solid rgba(185, 255, 57, 0.28);
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 90% 20%, rgba(185, 255, 57, 0.13), transparent 35%),
+        var(--panel);
+}
+
+.company-hero h2 {
+    margin: 8px 0 14px;
+    font-family: "Manrope", sans-serif;
+    font-size: clamp(34px, 6vw, 52px);
+}
+
+.company-hero p:not(.panel-kicker) {
+    max-width: 680px;
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.company-hero-mark {
+    width: 150px;
+    height: 150px;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: rgba(185, 255, 57, 0.05);
+}
+
+.company-hero-mark .brand-mark {
+    transform: scale(2.1) rotate(-4deg);
+}
+
+.company-content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+}
+
+.company-info-card {
+    min-height: 220px;
+    padding: 26px;
+}
+
+.company-info-card h2 {
+    margin: 9px 0 12px;
+    font-size: 21px;
+}
+
+.company-info-card p:not(.panel-kicker),
+.company-values {
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.company-info-wide {
+    grid-column: 1 / -1;
+    min-height: 180px;
+}
+
+.company-values {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+    margin: 18px 0 0;
+    padding-left: 18px;
 }
 
 .owner-message-form-panel {
@@ -1558,6 +1707,7 @@ h1 {
     font-size: 11px;
 }
 
+
 @media (max-width: 1100px) {
     .stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1569,6 +1719,16 @@ h1 {
 
     .activity-panel {
         min-height: 320px;
+    }
+
+    .company-hero {
+        grid-template-columns: minmax(0, 1fr) 120px;
+        padding: 32px;
+    }
+
+    .company-hero-mark {
+        width: 110px;
+        height: 110px;
     }
 }
 
@@ -1687,9 +1847,45 @@ h1 {
         flex-direction: column;
     }
 
+    .company-hero {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        padding: 28px 22px;
+    }
+
+    .company-hero-mark {
+        width: 90px;
+        height: 90px;
+        justify-self: start;
+    }
+
+    .company-hero-mark .brand-mark {
+        transform: scale(1.5) rotate(-4deg);
+    }
+
+    .company-content-grid,
+    .company-values {
+        grid-template-columns: 1fr;
+    }
+
+    .company-info-wide {
+        grid-column: auto;
+    }
+
+    .profile-summary {
+        align-items: flex-start;
+        padding-right: 22px;
+    }
+
+    .theme-toggle {
+        top: 14px;
+        right: 14px;
+    }
+
     .page-intro {
         align-items: flex-start;
         flex-direction: column;
         gap: 12px;
     }
+
 }
