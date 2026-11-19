@@ -48,6 +48,8 @@ body[data-theme="light"] .menu-button,
 body[data-theme="light"] .profile-details-list > div,
 body[data-theme="light"] .settings-form input,
 body[data-theme="light"] .settings-form select,
+body[data-theme="light"] .signup-form input,
+body[data-theme="light"] .signup-form select,
 body[data-theme="light"] .team-form input,
 body[data-theme="light"] .team-form select,
 body[data-theme="light"] .team-chat-form input {
@@ -970,6 +972,327 @@ h1 {
     padding: 22px;
 }
 
+.welcome-home {
+    display: grid;
+    gap: 18px;
+    margin-top: 26px;
+}
+
+.welcome-hero {
+    position: relative;
+    min-height: 330px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
+    align-items: center;
+    gap: 26px;
+    padding: 38px 42px;
+    overflow: hidden;
+    background:
+        radial-gradient(ellipse at 82% 50%, rgba(185, 255, 57, 0.1), transparent 38%),
+        var(--panel);
+}
+
+.welcome-hero-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 610px;
+}
+
+.welcome-hero h2,
+.welcome-steps h2 {
+    max-width: 580px;
+    font-size: clamp(29px, 4vw, 45px);
+    line-height: 1.13;
+    letter-spacing: -1.5px;
+}
+
+.welcome-hero-copy > p:not(.panel-kicker),
+.welcome-steps > div > p:last-child {
+    max-width: 500px;
+    margin: 16px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    margin-top: 26px;
+}
+
+.welcome-primary-action {
+    width: auto;
+    text-decoration: none;
+}
+
+.welcome-secondary-action,
+.signup-dashboard-link {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.welcome-secondary-action span,
+.welcome-steps-action span,
+.signup-dashboard-link span {
+    margin-left: 5px;
+    color: var(--lime);
+}
+
+.welcome-secondary-action:hover,
+.signup-dashboard-link:hover {
+    color: var(--lime);
+}
+
+.welcome-visual {
+    position: relative;
+    min-height: 230px;
+    display: grid;
+    place-items: center;
+}
+
+.welcome-visual-orbit {
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    border: 1px solid rgba(185, 255, 57, 0.16);
+    border-radius: 50%;
+    box-shadow: 0 0 0 24px rgba(185, 255, 57, 0.025), 0 0 0 48px rgba(185, 255, 57, 0.02);
+}
+
+.welcome-visual-mark {
+    z-index: 1;
+    width: 110px;
+    height: 110px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(185, 255, 57, 0.24);
+    border-radius: 30px;
+    background: rgba(15, 18, 14, 0.9);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.3);
+    transform: rotate(-8deg);
+}
+
+.welcome-visual-mark .brand-mark {
+    transform: scale(1.7) rotate(4deg);
+}
+
+.welcome-visual-card {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+}
+
+.welcome-visual-card span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--lime);
+}
+
+.welcome-visual-card-top {
+    top: 24px;
+    right: 6px;
+}
+
+.welcome-visual-card-bottom {
+    bottom: 20px;
+    left: 0;
+    padding-right: 22px;
+}
+
+.welcome-visual-card-bottom span:first-child {
+    width: 22px;
+    height: 22px;
+    background: rgba(185, 255, 57, 0.18);
+}
+
+.welcome-visual-card-bottom span:last-child {
+    width: 50px;
+    height: 5px;
+    border-radius: 4px;
+    background: #646a60;
+}
+
+.welcome-highlights {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.welcome-highlight {
+    min-height: 150px;
+    padding: 20px;
+}
+
+.welcome-highlight-number {
+    color: var(--lime);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.welcome-highlight h3 {
+    margin: 14px 0 7px;
+    font-family: "Manrope", sans-serif;
+    font-size: 15px;
+}
+
+.welcome-highlight p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.welcome-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 25px 28px;
+}
+
+.welcome-steps h2 {
+    font-size: clamp(20px, 2.5vw, 27px);
+    letter-spacing: -0.5px;
+}
+
+.welcome-steps > div > p:last-child {
+    margin-top: 8px;
+    font-size: 12px;
+}
+
+.welcome-steps-action {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    text-decoration: none;
+}
+
+.signup-page {
+    display: grid;
+    justify-items: stretch;
+}
+
+.signup-dialog {
+    width: min(720px, calc(100% - 32px));
+    max-width: none;
+    max-height: calc(100vh - 32px);
+    padding: 0;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text);
+}
+
+.signup-dialog::backdrop {
+    background: rgba(3, 5, 4, 0.76);
+    backdrop-filter: blur(6px);
+}
+
+.signup-panel {
+    position: relative;
+    width: 100%;
+    min-height: 0;
+    padding: 30px;
+}
+
+.signup-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+}
+
+.signup-panel h2 {
+    font-size: 28px;
+}
+
+.signup-intro {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.signup-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+}
+
+.signup-form label {
+    display: grid;
+    gap: 8px;
+    color: #cbd0c8;
+    font-size: 12px;
+}
+
+.signup-form input,
+.signup-form select {
+    width: 100%;
+    height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #171917;
+    color: var(--text);
+}
+
+.signup-form input::placeholder {
+    color: #737970;
+}
+
+.signup-form input:focus,
+.signup-form select:focus {
+    border-color: var(--lime);
+    outline: 2px solid rgba(185, 255, 57, 0.15);
+}
+
+.signup-submit {
+    width: auto;
+    justify-self: start;
+    padding: 0 17px;
+}
+
+.signup-submit:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.signup-status {
+    align-self: center;
+    min-height: 16px;
+    margin: 0;
+    color: var(--lime);
+    font-size: 11px;
+}
+
+.signup-disclaimer {
+    margin: 18px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.signup-dashboard-link {
+    display: inline-block;
+    margin-top: 16px;
+    color: var(--lime);
+}
+
 .owner-announcement {
     min-height: 260px;
     display: flex;
@@ -1861,6 +2184,11 @@ h1 {
 
 
 @media (max-width: 1100px) {
+    .welcome-hero {
+        grid-template-columns: minmax(0, 1fr) minmax(180px, 0.65fr);
+        padding: 32px;
+    }
+
     .stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1987,6 +2315,7 @@ h1 {
     .project-grid,
     .team-grid,
     .settings-form,
+    .signup-form,
     .team-form,
     .messaging-layout,
     .profile-details-list,
@@ -1997,6 +2326,58 @@ h1 {
     .owner-moderation-message {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .welcome-hero {
+        grid-template-columns: 1fr;
+        padding: 28px 22px;
+    }
+
+    .welcome-hero h2 {
+        font-size: clamp(28px, 8vw, 38px);
+    }
+
+    .welcome-visual {
+        min-height: 175px;
+    }
+
+    .welcome-visual-orbit {
+        width: 165px;
+        height: 165px;
+    }
+
+    .welcome-visual-card-top {
+        right: 12%;
+    }
+
+    .welcome-visual-card-bottom {
+        left: 12%;
+    }
+
+    .welcome-highlights {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-highlight {
+        min-height: 0;
+    }
+
+    .welcome-steps {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 22px;
+    }
+
+    .signup-panel {
+        padding: 22px;
+    }
+
+    .signup-dialog {
+        max-height: calc(100vh - 24px);
+    }
+
+    .signup-form {
+        grid-template-columns: 1fr;
     }
 
     .company-hero {

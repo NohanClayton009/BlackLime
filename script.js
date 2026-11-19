@@ -160,6 +160,27 @@ const pages = {
                 </article>
             </section>`
     },
+    cadastro: {
+        title: "Criar meu perfil",
+        eyebrow: "SEU PRIMEIRO PASSO",
+        content: `
+            <section class="signup-page">
+                <article class="panel signup-panel">
+                    <button class="close-form-button signup-close" id="closeSignupDialog" type="button" aria-label="Fechar cadastro">&times;</button>
+                    <p class="panel-kicker">VAMOS COMEÇAR</p>
+                    <h2 id="signupTitle">Crie seu perfil</h2>
+                    <p class="signup-intro">Preencha seus dados para personalizar sua experiência na Black Lime.</p>
+                    <form class="signup-form">
+                        <label for="signupName">Nome completo<input id="signupName" name="name" type="text" autocomplete="name" placeholder="Como podemos chamar você?" required></label>
+                        <label for="signupEmail">E-mail<input id="signupEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+                        <button class="primary-button signup-submit" type="submit">Criar meu perfil</button>
+                        <p class="signup-status" id="signupStatus" role="status" aria-live="polite"></p>
+                    </form>
+                    <p class="signup-disclaimer">Cadastro de demonstração: os dados ficam salvos apenas neste navegador. Esta versão não possui login nem armazena senhas.</p>
+                    <a class="signup-dashboard-link" href="index.html?pagina=equipe">Já tenho um perfil? Acessar o painel <span aria-hidden="true">→</span></a>
+                </article>
+            </section>`
+    },
     analises: {
         title: "Análises",
         eyebrow: "DADOS E DESEMPENHO",
@@ -328,8 +349,6 @@ const pages = {
                 <form class="settings-form">
                     <label>Nome completo<input type="text" name="name" value="Nohan Silva"></label>
                     <label>E-mail<input type="email" name="email" value="nohan@example.com"></label>
-                    <label>Cargo<select name="position"><option>Dono</option><option>Administrador</option><option>Colaborador</option></select></label>
-                    <label>Empresa<input type="text" name="company" value="Black Lime"></label>
                     <button class="primary-button" type="submit">Salvar alterações</button>
                     <p class="form-status" role="status" aria-live="polite"></p>
                 </form>
@@ -337,7 +356,9 @@ const pages = {
     }
 };
 
-const currentPage = new URLSearchParams(window.location.search).get("pagina") || "inicio";
+const pageParams = new URLSearchParams(window.location.search);
+const isSignupDialogOpen = pageParams.get("pagina") === "cadastro";
+const currentPage = isSignupDialogOpen ? "inicio" : pageParams.get("pagina") || "inicio";
 const page = pages[currentPage];
 const createTeamButton = document.querySelector("#createTeamButton");
 
@@ -354,6 +375,28 @@ if (page) {
     pageEyebrow.textContent = page.eyebrow;
     pageContent.innerHTML = page.content;
     document.title = `${page.title} | Black Lime`;
+}
+
+if (isSignupDialogOpen) {
+    const signupDialog = document.createElement("dialog");
+    signupDialog.className = "signup-dialog";
+    signupDialog.setAttribute("aria-labelledby", "signupTitle");
+    signupDialog.innerHTML = pages.cadastro.content;
+    document.body.append(signupDialog);
+
+    signupDialog.addEventListener("close", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("pagina");
+        window.history.replaceState(window.history.state, "", url);
+    });
+    signupDialog.addEventListener("click", (event) => {
+        if (event.target === signupDialog) {
+            signupDialog.close();
+        }
+    });
+    document.querySelector("#closeSignupDialog").addEventListener("click", () => signupDialog.close());
+    signupDialog.showModal();
+    document.querySelector("#signupName").focus();
 }
 
 let savedProfileSettings = {};
@@ -547,6 +590,36 @@ document.querySelectorAll(".navigation .nav-item").forEach((item) => {
 });
 
 const settingsForm = document.querySelector(".settings-form");
+
+const signupForm = document.querySelector(".signup-form");
+if (signupForm) {
+    const signupStatus = document.querySelector("#signupStatus");
+    const signupSubmit = signupForm.querySelector('button[type="submit"]');
+
+    signupForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(signupForm);
+        const settings = {
+            name: formData.get("name").trim(),
+            email: formData.get("email").trim(),
+            position: "Colaborador"
+        };
+
+        try {
+            localStorage.setItem("blacklime-settings", JSON.stringify(settings));
+            updateSidebarProfile(settings.name, settings.position);
+            signupStatus.textContent = "Perfil criado neste navegador. Você já pode acessar o painel.";
+            signupSubmit.textContent = "Perfil criado";
+            signupSubmit.disabled = true;
+            signupForm.querySelectorAll("input, select").forEach((field) => {
+                field.disabled = true;
+            });
+        } catch (error) {
+            signupStatus.textContent = "Não foi possível salvar seu perfil neste navegador.";
+            console.error("Falha ao criar o perfil.", error);
+        }
+    });
+}
 
 const teamForm = document.querySelector(".team-form");
 
@@ -1338,7 +1411,10 @@ if (settingsForm) {
         event.preventDefault();
 
         try {
-            const settings = Object.fromEntries(new FormData(settingsForm));
+            const settings = {
+                ...savedProfileSettings,
+                ...Object.fromEntries(new FormData(settingsForm))
+            };
             localStorage.setItem("blacklime-settings", JSON.stringify(settings));
             updateSidebarProfile(settings.name, settings.position);
             status.textContent = "Alterações salvas neste navegador.";
