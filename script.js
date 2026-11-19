@@ -122,7 +122,59 @@ function updateSidebarProfile(nameValue, roleValue) {
     }
 }
 
+let savedProfileSettings = {};
+let profileSettingsError = null;
+try {
+    savedProfileSettings = JSON.parse(localStorage.getItem("blacklime-settings") || "{}");
+    if (!savedProfileSettings || typeof savedProfileSettings !== "object" || Array.isArray(savedProfileSettings)) {
+        throw new Error("Os dados do perfil estão em um formato inválido.");
+    }
+    updateSidebarProfile(savedProfileSettings.name, savedProfileSettings.position);
+} catch (error) {
+    profileSettingsError = error;
+    console.error("Falha ao carregar as informações do perfil.", error);
+}
+
 const pages = {
+    acesso: {
+        title: "Acesse a Black Lime",
+        eyebrow: "SUA CONTA",
+        content: `
+            <section class="auth-layout" aria-labelledby="authTitle">
+                <div class="auth-intro">
+                    <div class="auth-brand" aria-label="Black Lime">
+                        <div class="brand-mark" aria-hidden="true"><span></span><span></span></div>
+                        <span class="brand-name">BLACK<span>LIME</span></span>
+                    </div>
+                    <p class="panel-kicker">COLABORAÇÃO COMEÇA AQUI</p>
+                    <h2 id="authTitle">Boas ideias crescem em equipe.</h2>
+                    <p>Entre na sua conta ou crie seu perfil para continuar para a Black Lime.</p>
+                </div>
+                <section class="panel auth-panel" aria-label="Acessar ou criar conta">
+                    <div class="auth-tabs" role="group" aria-label="Escolha uma opção">
+                        <button class="auth-tab active" type="button" data-auth-mode="signup" aria-pressed="true">Criar conta</button>
+                        <button class="auth-tab" type="button" data-auth-mode="login" aria-pressed="false">Fazer login</button>
+                    </div>
+                    <form class="auth-form" id="authSignupForm">
+                        <h2>Criar seu perfil</h2>
+                        <label for="authSignupName">Nome completo</label>
+                        <input id="authSignupName" name="name" type="text" autocomplete="name" placeholder="Como podemos chamar você?" required>
+                        <label for="authSignupEmail">E-mail</label>
+                        <input id="authSignupEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required>
+                        <button class="primary-button auth-submit" type="submit">Criar conta e continuar</button>
+                        <p class="auth-status" id="authSignupStatus" role="status" aria-live="polite"></p>
+                    </form>
+                    <form class="auth-form" id="authLoginForm" hidden>
+                        <h2>Que bom ter você de volta</h2>
+                        <label for="authLoginEmail">E-mail da sua conta</label>
+                        <input id="authLoginEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required>
+                        <button class="primary-button auth-submit" type="submit">Entrar na Black Lime</button>
+                        <p class="auth-status" id="authLoginStatus" role="status" aria-live="polite"></p>
+                    </form>
+                    <p class="auth-note">Demonstração: o perfil fica salvo somente neste navegador. Esta versão não usa senhas nem possui autenticação online.</p>
+                </section>
+            </section>`
+    },
     empresa: {
         title: "Sobre a empresa",
         eyebrow: "BLACK LIME",
@@ -216,8 +268,21 @@ const pages = {
                 </div>
                 <form class="team-form">
                     <label>Nome da equipe<input type="text" name="teamName" value="CodeDev" required></label>
-                    <label>Integrantes <span class="field-hint">(separe os nomes por vírgula)</span><input type="text" name="teamMembers" value="Nohan Clayton" required></label>
-                    <label>Líder da equipe<select name="teamLeader" required><option value="">Selecione entre os integrantes</option></select></label>
+                    <div class="friend-selection-field">
+                        <span class="friend-selection-title">Lista de amizades <span class="field-hint">(selecione os membros)</span></span>
+                        <button class="friend-selection-button" id="toggleTeamFriends" type="button" aria-expanded="false" aria-controls="teamFriendList">
+                            <span>Selecionar amizades</span><span aria-hidden="true">⌄</span>
+                        </button>
+                        <div class="friend-selection-list" id="teamFriendList" hidden></div>
+                    </div>
+                    <div class="team-creator-field">
+                        <span class="friend-selection-title">Líder da equipe</span>
+                        <div class="team-creator-profile">
+                            <span class="avatar" id="teamCreatorAvatar" aria-hidden="true"></span>
+                            <span id="teamCreatorName"></span>
+                            <span class="team-creator-badge">Você</span>
+                        </div>
+                    </div>
                     <button class="primary-button team-submit" type="submit">Criar equipe</button>
                     <p class="team-form-status" role="status" aria-live="polite"></p>
                 </form>
@@ -230,7 +295,7 @@ const pages = {
                 <div class="team-grid" id="createdTeams"></div>
             </section>
             <div class="page-intro">
-                <div><h2>Amizades da empresa</h2><p>Pessoas e contatos da sua rede na empresa.</p></div>
+                <div><h2>Amizades</h2><p>Pessoas e contatos da sua rede na empresa.</p></div>
                 <button class="secondary-button add-friend-button" id="addFriendButton" type="button"><span aria-hidden="true">+</span> Adicionar amizade</button>
             </div>
             <section class="panel friend-form-panel" id="friendFormPanel" hidden>
@@ -246,7 +311,7 @@ const pages = {
                 </form>
             </section>
             <p class="company-friends-status" id="companyFriendsStatus" role="status" aria-live="polite"></p>
-            <section class="team-grid" id="companyFriendsGrid" aria-label="Amizades da empresa">
+            <section class="team-grid" id="companyFriendsGrid" aria-label="Amizades">
             </section>`
     },
     mensagens: {
@@ -259,9 +324,12 @@ const pages = {
                     <h2>Conversas</h2>
                     <p class="team-conversation-list-status" id="teamConversationListStatus" role="status" aria-live="polite"></p>
                     <div class="team-conversation-list" id="teamConversationList"></div>
+                    <p class="panel-kicker friend-conversation-kicker">AMIZADES</p>
+                    <p class="team-conversation-list-status" id="friendConversationListStatus" role="status" aria-live="polite"></p>
+                    <div class="team-conversation-list" id="friendConversationList"></div>
                 </aside>
-                <section class="panel team-chat-panel" aria-label="Conversa da equipe">
-                    <div id="emptyChatPrompt" class="empty-chat-prompt">Selecione uma equipe para abrir a conversa.</div>
+                <section class="panel team-chat-panel" aria-label="Conversa">
+                    <div id="emptyChatPrompt" class="empty-chat-prompt">Selecione uma equipe ou amizade para abrir a conversa.</div>
                     <div id="teamChatArea" class="team-chat-area" hidden>
                         <div class="team-chat-header">
                             <h2 id="teamConversationTitle"></h2>
@@ -357,10 +425,19 @@ const pages = {
 };
 
 const pageParams = new URLSearchParams(window.location.search);
-const isSignupDialogOpen = pageParams.get("pagina") === "cadastro";
-const currentPage = isSignupDialogOpen ? "inicio" : pageParams.get("pagina") || "inicio";
+const requestedPage = pageParams.get("pagina");
+const hasSavedProfile = typeof savedProfileSettings.name === "string" &&
+    Boolean(savedProfileSettings.name.trim()) &&
+    typeof savedProfileSettings.email === "string" &&
+    Boolean(savedProfileSettings.email.trim());
+const isSignupDialogOpen = requestedPage === "cadastro" && hasSavedProfile;
+const currentPage = isSignupDialogOpen
+    ? "inicio"
+    : (!hasSavedProfile && requestedPage !== "acesso" ? "acesso" : requestedPage || "inicio");
 const page = pages[currentPage];
 const createTeamButton = document.querySelector("#createTeamButton");
+
+document.body.classList.toggle("auth-screen", currentPage === "acesso");
 
 if (createTeamButton && currentPage === "empresa") {
     createTeamButton.hidden = true;
@@ -397,19 +474,6 @@ if (isSignupDialogOpen) {
     document.querySelector("#closeSignupDialog").addEventListener("click", () => signupDialog.close());
     signupDialog.showModal();
     document.querySelector("#signupName").focus();
-}
-
-let savedProfileSettings = {};
-let profileSettingsError = null;
-try {
-    savedProfileSettings = JSON.parse(localStorage.getItem("blacklime-settings") || "{}");
-    if (!savedProfileSettings || typeof savedProfileSettings !== "object" || Array.isArray(savedProfileSettings)) {
-        throw new Error("Os dados do perfil estão em um formato inválido.");
-    }
-    updateSidebarProfile(savedProfileSettings.name, savedProfileSettings.position);
-} catch (error) {
-    profileSettingsError = error;
-    console.error("Falha ao carregar as informações do perfil.", error);
 }
 
 const profilePageName = document.querySelector("#profilePageName");
@@ -621,38 +685,149 @@ if (signupForm) {
     });
 }
 
+const authSignupForm = document.querySelector("#authSignupForm");
+if (authSignupForm) {
+    const authSignupStatus = document.querySelector("#authSignupStatus");
+    const authLoginForm = document.querySelector("#authLoginForm");
+    const authLoginStatus = document.querySelector("#authLoginStatus");
+    const authTabs = document.querySelectorAll(".auth-tab");
+
+    authTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+            const showSignup = tab.dataset.authMode === "signup";
+            authSignupForm.hidden = !showSignup;
+            authLoginForm.hidden = showSignup;
+            authTabs.forEach((authTab) => {
+                const isActive = authTab === tab;
+                authTab.classList.toggle("active", isActive);
+                authTab.setAttribute("aria-pressed", String(isActive));
+            });
+            (showSignup ? authSignupForm : authLoginForm).querySelector("input").focus();
+        });
+    });
+
+    authSignupForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(authSignupForm);
+        const name = String(formData.get("name") || "").trim();
+        const email = String(formData.get("email") || "").trim();
+        if (!name || !email) {
+            authSignupStatus.textContent = "Informe seu nome e e-mail para continuar.";
+            return;
+        }
+
+        const settings = { name, email, position: "Colaborador" };
+        try {
+            localStorage.setItem("blacklime-settings", JSON.stringify(settings));
+            window.location.href = "index.html";
+        } catch (error) {
+            authSignupStatus.textContent = "Não foi possível salvar seu perfil neste navegador.";
+            console.error("Falha ao criar o perfil.", error);
+        }
+    });
+
+    authLoginForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const email = String(new FormData(authLoginForm).get("email") || "").trim();
+        const savedEmail = typeof savedProfileSettings.email === "string"
+            ? savedProfileSettings.email.trim()
+            : "";
+        if (!savedEmail || email.toLocaleLowerCase("pt-BR") !== savedEmail.toLocaleLowerCase("pt-BR")) {
+            authLoginStatus.textContent = "Não encontramos esse perfil neste navegador. Crie uma conta para continuar.";
+            return;
+        }
+
+        window.location.href = "index.html";
+    });
+}
+
 const teamForm = document.querySelector(".team-form");
 
 if (teamForm) {
-    const memberInput = teamForm.elements.teamMembers;
-    const leaderSelect = teamForm.elements.teamLeader;
+    const friendSelectionList = document.querySelector("#teamFriendList");
+    const toggleTeamFriendsButton = document.querySelector("#toggleTeamFriends");
     const teamStatus = teamForm.querySelector(".team-form-status");
     const teamList = document.querySelector("#createdTeams");
     const teamListTitle = document.querySelector("#teamListTitle");
     const submitButton = teamForm.querySelector(".team-submit");
     const creationPanel = document.querySelector("#teamCreationPanel");
     const showTeamFormButton = document.querySelector("#showTeamForm");
+    const teamCreatorNameElement = document.querySelector("#teamCreatorName");
+    const teamCreatorAvatar = document.querySelector("#teamCreatorAvatar");
+    const creatorName = typeof savedProfileSettings.name === "string" && savedProfileSettings.name.trim()
+        ? savedProfileSettings.name.trim()
+        : "Nohan Silva";
+    const creatorInitials = creatorName.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase();
     let teams = [];
     let storageAvailable = true;
+
+    teamCreatorNameElement.textContent = creatorName;
+    teamCreatorAvatar.textContent = creatorInitials;
 
     function setCreationFormVisible(visible) {
         creationPanel.hidden = !visible;
         showTeamFormButton.hidden = visible;
+        if (visible) {
+            populateFriendSelection();
+            friendSelectionList.hidden = true;
+            toggleTeamFriendsButton.setAttribute("aria-expanded", "false");
+        } else {
+            friendSelectionList.hidden = true;
+            toggleTeamFriendsButton.setAttribute("aria-expanded", "false");
+            toggleTeamFriendsButton.querySelector('[aria-hidden="true"]').textContent = "⌄";
+        }
     }
 
     function getMembers() {
-        return Array.from(new Set(memberInput.value.split(",").map((name) => name.trim()).filter(Boolean)));
+        return Array.from(new Set(
+            Array.from(friendSelectionList.querySelectorAll('input[type="checkbox"]:checked'))
+                .map((checkbox) => checkbox.value.trim())
+                .filter(Boolean)
+        ));
     }
 
-    function updateLeaderOptions() {
-        const selectedLeader = leaderSelect.value;
-        leaderSelect.replaceChildren(new Option("Selecione entre os integrantes", ""));
+    function getFriendDirectory() {
+        try {
+            const friends = JSON.parse(localStorage.getItem("blacklime-company-friend-list") || "[]");
+            return Array.isArray(friends)
+                ? friends.filter((friend) => friend && typeof friend.name === "string" && typeof friend.email === "string")
+                : [];
+        } catch (error) {
+            return [];
+        }
+    }
 
-        getMembers().forEach((member) => {
-            leaderSelect.add(new Option(member, member));
+    function populateFriendSelection() {
+        friendSelectionList.replaceChildren();
+        getFriendDirectory().forEach((friend) => {
+            const label = document.createElement("label");
+            label.className = "friend-selection-option";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.name = "teamMembers";
+            checkbox.value = friend.name;
+
+            const copy = document.createElement("span");
+            copy.textContent = friend.name;
+            label.append(checkbox, copy);
+            friendSelectionList.append(label);
         });
 
-        leaderSelect.value = getMembers().includes(selectedLeader) ? selectedLeader : "";
+        if (getFriendDirectory().length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "friend-selection-empty";
+            empty.textContent = "Nenhuma amizade cadastrada.";
+            friendSelectionList.append(empty);
+        }
+        updateFriendButton();
+    }
+
+    function updateFriendButton() {
+        const count = getMembers().length;
+        toggleTeamFriendsButton.querySelector("span").textContent = count
+            ? `${count} amizade${count === 1 ? "" : "s"} selecionada${count === 1 ? "" : "s"}`
+            : "Selecionar amizades";
     }
 
     function renderTeams() {
@@ -752,8 +927,15 @@ if (teamForm) {
         showTeamFormButton.focus();
     });
 
-    updateLeaderOptions();
-    memberInput.addEventListener("input", updateLeaderOptions);
+    toggleTeamFriendsButton.addEventListener("click", () => {
+        friendSelectionList.hidden = !friendSelectionList.hidden;
+        toggleTeamFriendsButton.setAttribute("aria-expanded", String(!friendSelectionList.hidden));
+        toggleTeamFriendsButton.querySelector('[aria-hidden="true"]').textContent =
+            friendSelectionList.hidden ? "⌄" : "⌃";
+    });
+
+    populateFriendSelection();
+    friendSelectionList.addEventListener("change", updateFriendButton);
 
     teamForm.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -762,11 +944,12 @@ if (teamForm) {
         }
 
         const name = teamForm.elements.teamName.value.trim();
-        const members = getMembers();
-        const leader = leaderSelect.value;
+        const selectedFriends = getMembers();
+        const members = Array.from(new Set([creatorName, ...selectedFriends]));
+        const leader = creatorName;
 
-        if (!name || members.length === 0 || !members.includes(leader)) {
-            teamStatus.textContent = "Informe o nome da equipe, os integrantes e escolha um deles como líder.";
+        if (!name || selectedFriends.length === 0) {
+            teamStatus.textContent = "Informe o nome da equipe e selecione pelo menos uma amizade.";
             return;
         }
 
@@ -789,9 +972,10 @@ if (teamForm) {
         setCreationFormVisible(false);
         teamStatus.textContent = `Equipe ${name} criada e direcionada para ${leader}.`;
         teamForm.elements.teamName.value = "";
-        memberInput.value = "";
-        updateLeaderOptions();
-        leaderSelect.value = "";
+        friendSelectionList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+            checkbox.checked = false;
+        });
+        updateFriendButton();
     });
 }
 
@@ -805,12 +989,9 @@ if (friendsGrid) {
     const friendForm = document.querySelector(".friend-form");
     const friendSubmitButton = friendForm.querySelector('button[type="submit"]');
     const friendsStorageKey = "blacklime-company-friend-list";
-    const defaultFriends = [
-        { name: "Nohan Silva", role: "Administrador" },
-        { name: "Marina Costa", role: "Design" },
-        { name: "João Pedro", role: "Desenvolvimento" },
-        { name: "Ana Clara", role: "Marketing" }
-    ];
+    const defaultFriends = [];
+    const removedFriendNames = new Set(["Nohan Silva", "Marina Costa", "João Pedro", "Ana Clara"]);
+    const isRemovedFriend = (friend) => removedFriendNames.has(friend.name);
     let companyFriends = [...defaultFriends];
     let friendsStorageAvailable = true;
 
@@ -882,7 +1063,8 @@ if (friendsGrid) {
             )) {
                 throw new Error("Os dados salvos das amizades estão em um formato inválido.");
             }
-            companyFriends = parsedFriends;
+            companyFriends = parsedFriends.filter((friend) => !isRemovedFriend(friend));
+            localStorage.setItem(friendsStorageKey, JSON.stringify(companyFriends));
         } else {
             const legacyFriends = JSON.parse(localStorage.getItem("blacklime-company-friends") || "[]");
             if (!Array.isArray(legacyFriends) || legacyFriends.some((friend) =>
@@ -893,6 +1075,9 @@ if (friendsGrid) {
 
             companyFriends = [...defaultFriends];
             legacyFriends.forEach((friend) => {
+                if (isRemovedFriend(friend)) {
+                    return;
+                }
                 const exists = companyFriends.some((savedFriend) =>
                     savedFriend.name.localeCompare(friend.name, "pt-BR", { sensitivity: "base" }) === 0
                 );
@@ -1144,7 +1329,9 @@ if (currentPage === "inicio" && new URLSearchParams(window.location.search).get(
 const teamConversationList = document.querySelector("#teamConversationList");
 
 if (teamConversationList) {
+    const friendConversationList = document.querySelector("#friendConversationList");
     const listStatus = document.querySelector("#teamConversationListStatus");
+    const friendListStatus = document.querySelector("#friendConversationListStatus");
     const chatArea = document.querySelector("#teamChatArea");
     const emptyChatPrompt = document.querySelector("#emptyChatPrompt");
     const chatTitle = document.querySelector("#teamConversationTitle");
@@ -1154,6 +1341,7 @@ if (teamConversationList) {
     const chatForm = document.querySelector("#teamChatForm");
     const chatInput = chatForm.elements.message;
     let teams = [];
+    let friends = [];
     let deleteChatMessage = () => {};
     let editChatMessage = () => {};
     const canDeleteChatMessages = !profileSettingsError &&
@@ -1223,18 +1411,21 @@ if (teamConversationList) {
             throw new Error("Os dados salvos das equipes estão em um formato inválido.");
         }
         teams = savedTeams;
-
         if (teams.length === 0) {
-            listStatus.textContent = "Nenhuma equipe foi criada ainda.";
+            listStatus.textContent = "Nenhuma equipe cadastrada.";
         }
 
+        const selectedConversation = new URLSearchParams(window.location.search);
+        const selectedTeamName = selectedConversation.get("tipo") === "amizade"
+            ? null
+            : selectedConversation.get("conversa");
         teams.forEach((team) => {
             const link = document.createElement("a");
             link.className = "team-conversation-link";
             link.href = `index.html?pagina=mensagens&conversa=${encodeURIComponent(team.name)}`;
             link.textContent = team.name;
             link.setAttribute("aria-label", `Abrir conversa da equipe ${team.name}`);
-            if (team.name === new URLSearchParams(window.location.search).get("conversa")) {
+            if (team.name === selectedTeamName) {
                 link.setAttribute("aria-current", "page");
             }
             teamConversationList.append(link);
@@ -1244,15 +1435,56 @@ if (teamConversationList) {
         console.error("Falha ao carregar as equipes para as conversas.", error);
     }
 
-    const selectedTeamName = new URLSearchParams(window.location.search).get("conversa");
-    const selectedTeam = teams.find((team) => team.name === selectedTeamName);
+    try {
+        const savedFriends = JSON.parse(localStorage.getItem("blacklime-company-friend-list") || "[]");
+        if (!Array.isArray(savedFriends) || savedFriends.some((friend) =>
+            !friend || typeof friend.name !== "string" || typeof friend.email !== "string"
+        )) {
+            throw new Error("Os dados salvos das amizades estão em um formato inválido.");
+        }
+        friends = savedFriends;
+        if (friends.length === 0) {
+            friendListStatus.textContent = "Nenhuma amizade cadastrada.";
+        }
+        friends.forEach((friend) => {
+            const link = document.createElement("a");
+            link.className = "team-conversation-link";
+            link.href = `index.html?pagina=mensagens&tipo=amizade&conversa=${encodeURIComponent(friend.email)}`;
+            link.textContent = friend.name;
+            link.setAttribute("aria-label", `Abrir conversa com ${friend.name}`);
+            if (
+                new URLSearchParams(window.location.search).get("tipo") === "amizade" &&
+                friend.email.localeCompare(new URLSearchParams(window.location.search).get("conversa") || "", "pt-BR", { sensitivity: "base" }) === 0
+            ) {
+                link.setAttribute("aria-current", "page");
+            }
+            friendConversationList.append(link);
+        });
+    } catch (error) {
+        friendListStatus.textContent = "Não foi possível carregar as amizades neste navegador.";
+        console.error("Falha ao carregar as amizades para as conversas.", error);
+    }
 
-    if (selectedTeam) {
+    const conversationParams = new URLSearchParams(window.location.search);
+    const selectedTeamName = conversationParams.get("tipo") === "amizade" ? null : conversationParams.get("conversa");
+    const selectedTeam = teams.find((team) => team.name === selectedTeamName);
+    const selectedFriend = conversationParams.get("tipo") === "amizade"
+        ? friends.find((friend) =>
+            friend.email.localeCompare(conversationParams.get("conversa") || "", "pt-BR", { sensitivity: "base" }) === 0
+        )
+        : null;
+
+    if (selectedTeam || selectedFriend) {
         emptyChatPrompt.hidden = true;
         chatArea.hidden = false;
-        chatTitle.textContent = selectedTeam.name;
-        chatMeta.textContent = `Líder: ${selectedTeam.leader} · ${selectedTeam.members.length} integrante${selectedTeam.members.length === 1 ? "" : "s"}`;
-        const conversationKey = "blacklime-team-conversations";
+        const conversationId = selectedFriend ? selectedFriend.email.toLocaleLowerCase("pt-BR") : selectedTeam.name;
+        const conversationStorageKey = selectedFriend
+            ? "blacklime-friend-conversations"
+            : "blacklime-team-conversations";
+        chatTitle.textContent = selectedFriend ? selectedFriend.name : selectedTeam.name;
+        chatMeta.textContent = selectedFriend
+            ? `${selectedFriend.role || "Amizade"} · ${selectedFriend.email}`
+            : `Líder: ${selectedTeam.leader} · ${selectedTeam.members.length} integrante${selectedTeam.members.length === 1 ? "" : "s"}`;
         let allConversations = {};
         let messages = [];
         let chatStorageAvailable = true;
@@ -1267,11 +1499,11 @@ if (teamConversationList) {
             const nextExpiry = Math.min(...messages.map((message) => message.sentAt + MESSAGE_RETENTION_MS));
             chatExpiryTimer = window.setTimeout(() => {
                 messages = messages.filter((message) => Date.now() - message.sentAt < MESSAGE_RETENTION_MS);
-                allConversations = { ...allConversations, [selectedTeam.name]: messages };
+                allConversations = { ...allConversations, [conversationId]: messages };
                 renderChatMessages(messages);
 
                 try {
-                    localStorage.setItem(conversationKey, JSON.stringify(allConversations));
+                    localStorage.setItem(conversationStorageKey, JSON.stringify(allConversations));
                 } catch (error) {
                     chatStorageAvailable = false;
                     chatInput.disabled = true;
@@ -1291,9 +1523,9 @@ if (teamConversationList) {
             }
 
             const updatedMessages = messages.filter((_, index) => index !== messageIndex);
-            const updatedConversations = { ...allConversations, [selectedTeam.name]: updatedMessages };
+            const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
             try {
-                localStorage.setItem(conversationKey, JSON.stringify(updatedConversations));
+                localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
             } catch (error) {
                 chatStatus.textContent = "Não foi possível excluir a mensagem neste navegador.";
                 console.error("Falha ao excluir uma mensagem da conversa.", error);
@@ -1317,9 +1549,9 @@ if (teamConversationList) {
                 const updatedMessages = messages.map((savedMessage, index) =>
                     index === messageIndex ? { ...savedMessage, text: updatedText } : savedMessage
                 );
-                const updatedConversations = { ...allConversations, [selectedTeam.name]: updatedMessages };
+                const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
                 try {
-                    localStorage.setItem(conversationKey, JSON.stringify(updatedConversations));
+                    localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
                 } catch (error) {
                     chatStatus.textContent = "Não foi possível editar a mensagem neste navegador.";
                     console.error("Falha ao editar uma mensagem da conversa.", error);
@@ -1335,16 +1567,16 @@ if (teamConversationList) {
         };
 
         try {
-            allConversations = JSON.parse(localStorage.getItem(conversationKey) || "{}");
+            allConversations = JSON.parse(localStorage.getItem(conversationStorageKey) || "{}");
             if (!allConversations || typeof allConversations !== "object" || Array.isArray(allConversations)) {
                 throw new Error("As conversas salvas estão em um formato inválido.");
             }
-            const savedTeamMessages = allConversations[selectedTeam.name];
-            const preparedMessages = prepareExpiringMessages(savedTeamMessages === undefined ? [] : savedTeamMessages);
+            const savedConversationMessages = allConversations[conversationId];
+            const preparedMessages = prepareExpiringMessages(savedConversationMessages === undefined ? [] : savedConversationMessages);
             messages = preparedMessages.messages;
-            allConversations = { ...allConversations, [selectedTeam.name]: messages };
+            allConversations = { ...allConversations, [conversationId]: messages };
             if (preparedMessages.changed) {
-                localStorage.setItem(conversationKey, JSON.stringify(allConversations));
+                localStorage.setItem(conversationStorageKey, JSON.stringify(allConversations));
             }
             renderChatMessages(messages);
             scheduleChatMessageExpiry();
@@ -1369,9 +1601,9 @@ if (teamConversationList) {
 
             const retainedMessages = messages.filter((savedMessage) => Date.now() - savedMessage.sentAt < MESSAGE_RETENTION_MS);
             const updatedMessages = [...retainedMessages, { text: message, sentAt: Date.now() }];
-            const updatedConversations = { ...allConversations, [selectedTeam.name]: updatedMessages };
+            const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
             try {
-                localStorage.setItem(conversationKey, JSON.stringify(updatedConversations));
+                localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
             } catch (error) {
                 chatStatus.textContent = "Não foi possível enviar a mensagem neste navegador.";
                 console.error("Falha ao enviar mensagem na conversa da equipe.", error);
@@ -1386,8 +1618,10 @@ if (teamConversationList) {
             chatForm.reset();
             chatInput.focus();
         });
-    } else if (selectedTeamName) {
-        emptyChatPrompt.textContent = "Essa equipe não foi encontrada. Volte à página Equipe e tente novamente.";
+    } else if (conversationParams.get("conversa")) {
+        emptyChatPrompt.textContent = conversationParams.get("tipo") === "amizade"
+            ? "Essa amizade não foi encontrada. Confira a lista de amizades e tente novamente."
+            : "Essa equipe não foi encontrada. Volte à página Equipe e tente novamente.";
     }
 }
 
