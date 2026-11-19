@@ -9,6 +9,8 @@ const pageEyebrow = document.querySelector("#pageEyebrow");
 const MESSAGE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PROFILE_ROLE = "Dono";
 const THEME_STORAGE_KEY = "blacklime-theme";
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_HASH_ITERATIONS = 210000;
 
 function applyTheme(theme) {
     const selectedTheme = theme === "light" ? "light" : "dark";
@@ -135,6 +137,203 @@ try {
     console.error("Falha ao carregar as informações do perfil.", error);
 }
 
+function bytesToBase64(bytes) {
+    return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
+}
+
+function base64ToBytes(value) {
+    return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+async function derivePasswordHash(password, salt) {
+    if (!window.crypto || !window.crypto.subtle || !window.crypto.getRandomValues) {
+        throw new Error("A proteção de senha exige um navegador compatível em uma conexão segura.");
+    }
+
+    const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"]
+    );
+    const derivedBits = await window.crypto.subtle.deriveBits({
+        name: "PBKDF2",
+        salt,
+        iterations: PASSWORD_HASH_ITERATIONS,
+        hash: "SHA-256"
+    }, keyMaterial, 256);
+    return new Uint8Array(derivedBits);
+}
+
+async function createPasswordCredentials(password) {
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const hash = await derivePasswordHash(password, salt);
+    return {
+        passwordSalt: bytesToBase64(salt),
+        passwordHash: bytesToBase64(hash)
+    };
+}
+
+async function verifyPassword(password, credentials) {
+    if (
+        typeof credentials.passwordSalt !== "string" ||
+        typeof credentials.passwordHash !== "string"
+    ) {
+        return false;
+    }
+
+    const salt = base64ToBytes(credentials.passwordSalt);
+    const expectedHash = base64ToBytes(credentials.passwordHash);
+    const actualHash = await derivePasswordHash(password, salt);
+    if (actualHash.length !== expectedHash.length) {
+        return false;
+    }
+
+    let difference = 0;
+    actualHash.forEach((byte, index) => {
+        difference |= byte ^ expectedHash[index];
+    });
+    return difference === 0;
+}
+
+const NOTIFICATIONS_STORAGE_KEY = "blacklime-notifications";
+const notificationButton = document.querySelector("#notificationButton");
+const notificationPanel = document.querySelector("#notificationPanel");
+const notificationCount = document.querySelector("#notificationCount");
+const notificationList = document.querySelector("#notificationList");
+const notificationStatus = document.querySelector("#notificationStatus");
+let notifications = [];
+
+function renderNotifications() {
+    notificationList.replaceChildren();
+    const unreadCount = notifications.filter((notification) => !notification.read).length;
+    notificationCount.hidden = unreadCount === 0;
+    notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+
+    if (notifications.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "notification-empty";
+        empty.textContent = "Nenhuma notificação por enquanto.";
+        notificationList.append(empty);
+        return;
+    }
+
+    notifications.slice().reverse().forEach((notification) => {
+        const item = document.createElement("article");
+        item.className = `notification-item${notification.read ? "" : " unread"}`;
+
+        const text = document.createElement("p");
+        text.textContent = notification.text;
+
+        const time = document.createElement("time");
+        time.dateTime = new Date(notification.createdAt).toISOString();
+        time.textContent = new Date(notification.createdAt).toLocaleString("pt-BR");
+
+        item.append(text, time);
+        notificationList.append(item);
+    });
+}
+
+function parseNotifications(value) {
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed) || parsed.some((notification) =>
+        !notification ||
+        typeof notification.id !== "string" ||
+        typeof notification.text !== "string" ||
+        !Number.isFinite(notification.createdAt) ||
+        typeof notification.read !== "boolean"
+    )) {
+        throw new Error("As notificações salvas estão em um formato inválido.");
+    }
+    return parsed;
+}
+
+function saveNotifications(updatedNotifications) {
+    try {
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updatedNotifications));
+        notifications = updatedNotifications;
+        notificationStatus.textContent = "";
+        renderNotifications();
+        return true;
+    } catch (error) {
+        notificationStatus.textContent = "Não foi possível salvar as notificações neste navegador.";
+        console.error("Falha ao salvar as notificações.", error);
+        return false;
+    }
+}
+
+function publishNotification(text) {
+    let latestNotifications;
+    try {
+        latestNotifications = parseNotifications(localStorage.getItem(NOTIFICATIONS_STORAGE_KEY));
+    } catch (error) {
+        notificationStatus.textContent = "Não foi possível atualizar as notificações salvas.";
+        console.error("Falha ao preparar uma nova notificação.", error);
+        return false;
+    }
+
+    const notification = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        text,
+        createdAt: Date.now(),
+        read: false
+    };
+    return saveNotifications([...latestNotifications, notification].slice(-50));
+}
+
+try {
+    notifications = parseNotifications(localStorage.getItem(NOTIFICATIONS_STORAGE_KEY));
+} catch (error) {
+    notificationStatus.textContent = "Não foi possível carregar as notificações salvas.";
+    console.error("Falha ao carregar as notificações.", error);
+}
+renderNotifications();
+
+notificationButton.addEventListener("click", () => {
+    const opening = notificationPanel.hidden;
+    notificationPanel.hidden = !opening;
+    notificationButton.setAttribute("aria-expanded", String(opening));
+    if (opening && notifications.some((notification) => !notification.read)) {
+        saveNotifications(notifications.map((notification) => ({ ...notification, read: true })));
+    }
+});
+
+document.querySelector("#closeNotifications").addEventListener("click", () => {
+    notificationPanel.hidden = true;
+    notificationButton.setAttribute("aria-expanded", "false");
+    notificationButton.focus();
+});
+
+document.addEventListener("click", (event) => {
+    if (!notificationPanel.hidden && !event.target.closest(".notification-control")) {
+        notificationPanel.hidden = true;
+        notificationButton.setAttribute("aria-expanded", "false");
+    }
+});
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !notificationPanel.hidden) {
+        notificationPanel.hidden = true;
+        notificationButton.setAttribute("aria-expanded", "false");
+        notificationButton.focus();
+    }
+});
+
+window.addEventListener("storage", (event) => {
+    if (event.key !== NOTIFICATIONS_STORAGE_KEY) {
+        return;
+    }
+    try {
+        notifications = parseNotifications(event.newValue);
+        notificationStatus.textContent = "";
+        renderNotifications();
+    } catch (error) {
+        notificationStatus.textContent = "Não foi possível atualizar as notificações.";
+        console.error("Falha ao sincronizar as notificações entre abas.", error);
+    }
+});
+
 const pages = {
     acesso: {
         title: "Acesse a Black Lime",
@@ -161,6 +360,13 @@ const pages = {
                         <input id="authSignupName" name="name" type="text" autocomplete="name" placeholder="Como podemos chamar você?" required>
                         <label for="authSignupEmail">E-mail</label>
                         <input id="authSignupEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required>
+                        <label for="authSignupPassword">Criar senha</label>
+                        <div class="password-field">
+                            <input id="authSignupPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                            <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-controls="authSignupPassword" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>
+                            </button>
+                        </div>
                         <button class="primary-button auth-submit" type="submit">Criar conta e continuar</button>
                         <p class="auth-status" id="authSignupStatus" role="status" aria-live="polite"></p>
                     </form>
@@ -168,10 +374,17 @@ const pages = {
                         <h2>Que bom ter você de volta</h2>
                         <label for="authLoginEmail">E-mail da sua conta</label>
                         <input id="authLoginEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required>
+                        <label for="authLoginPassword">Senha</label>
+                        <div class="password-field">
+                            <input id="authLoginPassword" name="password" type="password" autocomplete="current-password" required>
+                            <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-controls="authLoginPassword" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>
+                            </button>
+                        </div>
                         <button class="primary-button auth-submit" type="submit">Entrar na Black Lime</button>
                         <p class="auth-status" id="authLoginStatus" role="status" aria-live="polite"></p>
                     </form>
-                    <p class="auth-note">Demonstração: o perfil fica salvo somente neste navegador. Esta versão não usa senhas nem possui autenticação online.</p>
+                    <p class="auth-note">Demonstração: o perfil e a senha protegida ficam salvos somente neste navegador. Não há autenticação online; não use uma senha de outros serviços.</p>
                 </section>
             </section>`
     },
@@ -225,10 +438,19 @@ const pages = {
                     <form class="signup-form">
                         <label for="signupName">Nome completo<input id="signupName" name="name" type="text" autocomplete="name" placeholder="Como podemos chamar você?" required></label>
                         <label for="signupEmail">E-mail<input id="signupEmail" name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+                        <div class="signup-password-group">
+                            <label for="signupPassword">Criar senha</label>
+                            <div class="password-field">
+                                <input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                                <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-controls="signupPassword" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>
+                                </button>
+                            </div>
+                        </div>
                         <button class="primary-button signup-submit" type="submit">Criar meu perfil</button>
                         <p class="signup-status" id="signupStatus" role="status" aria-live="polite"></p>
                     </form>
-                    <p class="signup-disclaimer">Cadastro de demonstração: os dados ficam salvos apenas neste navegador. Esta versão não possui login nem armazena senhas.</p>
+                    <p class="signup-disclaimer">Cadastro de demonstração: o perfil e a senha protegida ficam salvos apenas neste navegador. Não use uma senha de outros serviços.</p>
                     <a class="signup-dashboard-link" href="index.html?pagina=equipe">Já tenho um perfil? Acessar o painel <span aria-hidden="true">→</span></a>
                 </article>
             </section>`
@@ -305,7 +527,6 @@ const pages = {
                 </div>
                 <form class="team-form friend-form">
                     <label>Nome<input type="text" name="friendName" required></label>
-                    <label>Cargo ou área<input type="text" name="friendRole" required></label>
                     <label>E-mail<input type="email" name="friendEmail" required></label>
                     <button class="primary-button" type="submit">Adicionar</button>
                 </form>
@@ -334,6 +555,7 @@ const pages = {
                         <div class="team-chat-header">
                             <h2 id="teamConversationTitle"></h2>
                             <p id="teamConversationMeta"></p>
+                            <p class="team-presence-status" id="teamPresenceStatus" role="status" aria-live="polite"></p>
                             <p class="message-retention-note">As mensagens são excluídas automaticamente 24 horas após o envio.</p>
                         </div>
                         <div class="team-chat-messages" id="teamChatMessages" aria-live="polite"></div>
@@ -401,6 +623,7 @@ const pages = {
                     <dl class="profile-details-list">
                         <div><dt>Nome completo</dt><dd id="profileDetailName">Nohan Silva</dd></div>
                         <div><dt>E-mail</dt><dd id="profileDetailEmail">nohan@example.com</dd></div>
+                        <div><dt>Senha</dt><dd id="profileDetailPassword">Não definida</dd></div>
                     </dl>
                     <a class="secondary-button profile-owner-link" id="profileOwnerLink" href="index.html?pagina=dono" hidden>Abrir página do Dono</a>
                     <p class="profile-page-status" id="profilePageStatus" role="status" aria-live="polite"></p>
@@ -415,6 +638,15 @@ const pages = {
                 <form class="settings-form">
                     <label>Nome completo<input type="text" name="name" value="Nohan Silva"></label>
                     <label>E-mail<input type="email" name="email" value="nohan@example.com"></label>
+                    <div class="settings-password-group">
+                        <label for="settingsPassword">Nova senha</label>
+                        <div class="password-field">
+                            <input id="settingsPassword" type="password" name="password" autocomplete="new-password" minlength="8" placeholder="Deixe em branco para manter a atual">
+                            <button class="password-toggle" type="button" aria-label="Mostrar senha" aria-controls="settingsPassword" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>
+                            </button>
+                        </div>
+                    </div>
                     <button class="primary-button" type="submit">Salvar alterações</button>
                     <p class="form-status" role="status" aria-live="polite"></p>
                 </form>
@@ -474,6 +706,23 @@ if (isSignupDialogOpen) {
     document.querySelector("#signupName").focus();
 }
 
+document.querySelectorAll(".password-toggle").forEach((toggle) => {
+    const input = document.getElementById(toggle.getAttribute("aria-controls"));
+    if (!input) {
+        console.error("Não foi possível encontrar o campo de senha associado ao botão.");
+        return;
+    }
+
+    toggle.addEventListener("click", () => {
+        const showPassword = input.type === "password";
+        input.type = showPassword ? "text" : "password";
+        toggle.classList.toggle("is-visible", showPassword);
+        toggle.setAttribute("aria-pressed", String(showPassword));
+        toggle.setAttribute("aria-label", showPassword ? "Ocultar senha" : "Mostrar senha");
+        toggle.title = showPassword ? "Ocultar senha" : "Mostrar senha";
+    });
+});
+
 const profilePageName = document.querySelector("#profilePageName");
 if (profilePageName) {
     const profilePageStatus = document.querySelector("#profilePageStatus");
@@ -497,6 +746,8 @@ if (profilePageName) {
         document.querySelector("#profilePageRole").textContent = role;
         document.querySelector("#profileDetailName").textContent = name;
         document.querySelector("#profileDetailEmail").textContent = email;
+        document.querySelector("#profileDetailPassword").textContent =
+            savedProfileSettings.passwordSalt && savedProfileSettings.passwordHash ? "••••••••" : "Não definida";
         document.querySelector("#profileOwnerLink").hidden = role !== "Dono";
     }
 }
@@ -653,26 +904,35 @@ if (signupForm) {
     const signupStatus = document.querySelector("#signupStatus");
     const signupSubmit = signupForm.querySelector('button[type="submit"]');
 
-    signupForm.addEventListener("submit", (event) => {
+    signupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         const formData = new FormData(signupForm);
+        const password = String(formData.get("password") || "");
+        if (password.length < PASSWORD_MIN_LENGTH) {
+            signupStatus.textContent = `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`;
+            return;
+        }
+
         const settings = {
-            name: formData.get("name").trim(),
-            email: formData.get("email").trim(),
+            name: String(formData.get("name") || "").trim(),
+            email: String(formData.get("email") || "").trim(),
             position: "Colaborador"
         };
 
         try {
+            signupSubmit.disabled = true;
+            Object.assign(settings, await createPasswordCredentials(password));
             localStorage.setItem("blacklime-settings", JSON.stringify(settings));
             updateSidebarProfile(settings.name, settings.position);
             signupStatus.textContent = "Perfil criado neste navegador. Você já pode acessar o painel.";
             signupSubmit.textContent = "Perfil criado";
-            signupSubmit.disabled = true;
+            signupForm.elements.password.value = "";
             signupForm.querySelectorAll("input, select").forEach((field) => {
                 field.disabled = true;
             });
         } catch (error) {
-            signupStatus.textContent = "Não foi possível salvar seu perfil neste navegador.";
+            signupSubmit.disabled = false;
+            signupStatus.textContent = "Não foi possível criar o perfil ou proteger a senha neste navegador.";
             console.error("Falha ao criar o perfil.", error);
         }
     });
@@ -699,29 +959,37 @@ if (authSignupForm) {
         });
     });
 
-    authSignupForm.addEventListener("submit", (event) => {
+    authSignupForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         const formData = new FormData(authSignupForm);
         const name = String(formData.get("name") || "").trim();
         const email = String(formData.get("email") || "").trim();
-        if (!name || !email) {
-            authSignupStatus.textContent = "Informe seu nome e e-mail para continuar.";
+        const password = String(formData.get("password") || "");
+        if (!name || !email || password.length < PASSWORD_MIN_LENGTH) {
+            authSignupStatus.textContent = `Informe seu nome, e-mail e uma senha com pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`;
             return;
         }
 
-        const settings = { name, email, position: "Colaborador" };
         try {
+            const settings = {
+                name,
+                email,
+                position: "Colaborador",
+                ...await createPasswordCredentials(password)
+            };
             localStorage.setItem("blacklime-settings", JSON.stringify(settings));
             window.location.href = "index.html";
         } catch (error) {
-            authSignupStatus.textContent = "Não foi possível salvar seu perfil neste navegador.";
+            authSignupStatus.textContent = "Não foi possível criar o perfil ou proteger a senha neste navegador.";
             console.error("Falha ao criar o perfil.", error);
         }
     });
 
-    authLoginForm.addEventListener("submit", (event) => {
+    authLoginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const email = String(new FormData(authLoginForm).get("email") || "").trim();
+        const formData = new FormData(authLoginForm);
+        const email = String(formData.get("email") || "").trim();
+        const password = String(formData.get("password") || "");
         const savedEmail = typeof savedProfileSettings.email === "string"
             ? savedProfileSettings.email.trim()
             : "";
@@ -730,7 +998,18 @@ if (authSignupForm) {
             return;
         }
 
-        window.location.href = "index.html";
+        try {
+            if (!(await verifyPassword(password, savedProfileSettings))) {
+                authLoginStatus.textContent = savedProfileSettings.passwordHash
+                    ? "Senha incorreta."
+                    : "Este perfil ainda não tem senha. Acesse Configurações no painel para criar uma.";
+                return;
+            }
+            window.location.href = "index.html";
+        } catch (error) {
+            authLoginStatus.textContent = "Não foi possível verificar a senha neste navegador.";
+            console.error("Falha ao verificar a senha da conta.", error);
+        }
     });
 }
 
@@ -929,6 +1208,12 @@ if (teamForm) {
 
     populateFriendSelection();
     friendSelectionList.addEventListener("change", updateFriendButton);
+    window.addEventListener("blacklime-friends-updated", populateFriendSelection);
+    window.addEventListener("storage", (event) => {
+        if (event.key === "blacklime-company-friend-list") {
+            populateFriendSelection();
+        }
+    });
 
     teamForm.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -963,7 +1248,12 @@ if (teamForm) {
         teams.push(team);
         renderTeams();
         setCreationFormVisible(false);
-        teamStatus.textContent = `Equipe ${name} criada e direcionada para ${leader}.`;
+        const notificationSaved = publishNotification(
+            `${creatorName} adicionou ${selectedFriends.join(", ")} à equipe ${name}.`
+        );
+        teamStatus.textContent = notificationSaved
+            ? `Equipe ${name} criada e direcionada para ${leader}.`
+            : `Equipe ${name} criada, mas a notificação não pôde ser salva.`;
         teamForm.elements.teamName.value = "";
         friendSelectionList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
             checkbox.checked = false;
@@ -1008,9 +1298,7 @@ if (friendsGrid) {
             const details = document.createElement("div");
             const name = document.createElement("h2");
             name.textContent = friend.name;
-            const role = document.createElement("p");
-            role.textContent = friend.role;
-            details.append(name, role);
+            details.append(name);
             if (friend.email) {
                 const email = document.createElement("p");
                 email.className = "company-friend-email";
@@ -1052,7 +1340,7 @@ if (friendsGrid) {
         if (savedFriendList !== null) {
             const parsedFriends = JSON.parse(savedFriendList);
             if (!Array.isArray(parsedFriends) || parsedFriends.some((friend) =>
-                !friend || typeof friend.name !== "string" || typeof friend.role !== "string"
+                !friend || typeof friend.name !== "string"
             )) {
                 throw new Error("Os dados salvos das amizades estão em um formato inválido.");
             }
@@ -1061,7 +1349,7 @@ if (friendsGrid) {
         } else {
             const legacyFriends = JSON.parse(localStorage.getItem("blacklime-company-friends") || "[]");
             if (!Array.isArray(legacyFriends) || legacyFriends.some((friend) =>
-                !friend || typeof friend.name !== "string" || typeof friend.role !== "string"
+                !friend || typeof friend.name !== "string"
             )) {
                 throw new Error("Os dados antigos das amizades estão em um formato inválido.");
             }
@@ -1107,10 +1395,9 @@ if (friendsGrid) {
         }
 
         const name = friendForm.elements.friendName.value.trim();
-        const role = friendForm.elements.friendRole.value.trim();
         const email = friendForm.elements.friendEmail.value.trim();
-        if (!name || !role || !email) {
-            friendsStatus.textContent = "Informe o nome, o cargo ou área e o e-mail da pessoa.";
+        if (!name || !email) {
+            friendsStatus.textContent = "Informe o nome e o e-mail da pessoa.";
             return;
         }
 
@@ -1121,7 +1408,7 @@ if (friendsGrid) {
             return;
         }
 
-        const friend = { name, role, email };
+        const friend = { name, email };
         try {
             localStorage.setItem(friendsStorageKey, JSON.stringify([...companyFriends, friend]));
         } catch (error) {
@@ -1132,9 +1419,16 @@ if (friendsGrid) {
 
         companyFriends.push(friend);
         renderCompanyFriends();
+        window.dispatchEvent(new Event("blacklime-friends-updated"));
         friendForm.reset();
         friendFormPanel.hidden = true;
-        friendsStatus.textContent = `${name} foi adicionado(a) às amizades da empresa.`;
+        const actorName = typeof savedProfileSettings.name === "string" && savedProfileSettings.name.trim()
+            ? savedProfileSettings.name.trim()
+            : "Um usuário";
+        const notificationSaved = publishNotification(`${actorName} adicionou ${name} às amizades da empresa.`);
+        friendsStatus.textContent = notificationSaved
+            ? `${name} foi adicionado(a) às amizades da empresa.`
+            : `${name} foi adicionado(a), mas a notificação não pôde ser salva.`;
         addFriendButton.focus();
     });
 }
@@ -1329,6 +1623,7 @@ if (teamConversationList) {
     const emptyChatPrompt = document.querySelector("#emptyChatPrompt");
     const chatTitle = document.querySelector("#teamConversationTitle");
     const chatMeta = document.querySelector("#teamConversationMeta");
+    const presenceStatus = document.querySelector("#teamPresenceStatus");
     const chatMessages = document.querySelector("#teamChatMessages");
     const chatStatus = document.querySelector("#teamChatStatus");
     const chatForm = document.querySelector("#teamChatForm");
@@ -1348,7 +1643,9 @@ if (teamConversationList) {
 
             const sender = document.createElement("span");
             sender.className = "chat-message-sender";
-            sender.textContent = "Você";
+            sender.textContent = typeof message.sender === "string" && message.sender
+                ? message.sender
+                : "Você";
 
             const text = document.createElement("p");
             text.className = "chat-message-text";
@@ -1390,6 +1687,7 @@ if (teamConversationList) {
 
             chatMessages.append(bubble);
         });
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     try {
@@ -1482,6 +1780,96 @@ if (teamConversationList) {
         let messages = [];
         let chatStorageAvailable = true;
         let chatExpiryTimer;
+        const presenceStorageKey = "blacklime-chat-presence";
+        const presenceSessionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const currentSenderName = typeof savedProfileSettings.name === "string" && savedProfileSettings.name.trim()
+            ? savedProfileSettings.name.trim()
+            : "Usuário";
+        let presenceTimer;
+
+        function getActivePresence() {
+            const storedPresence = JSON.parse(localStorage.getItem(presenceStorageKey) || "{}");
+            if (!storedPresence || typeof storedPresence !== "object" || Array.isArray(storedPresence)) {
+                throw new Error("Os dados de presença estão em um formato inválido.");
+            }
+            const now = Date.now();
+            return Object.entries(storedPresence).filter(([, entry]) =>
+                entry &&
+                typeof entry.name === "string" &&
+                typeof entry.conversationId === "string" &&
+                Number.isFinite(entry.updatedAt) &&
+                now - entry.updatedAt < 15000
+            );
+        }
+
+        function renderPresence() {
+            try {
+                const activeSessions = getActivePresence()
+                    .filter(([, entry]) => entry.conversationId === conversationId);
+                const otherSessionCount = activeSessions.filter(([id]) => id !== presenceSessionId).length;
+                presenceStatus.textContent = otherSessionCount
+                    ? `Online neste navegador · ${otherSessionCount} outra${otherSessionCount === 1 ? "" : "s"} aba${otherSessionCount === 1 ? "" : "s"} nesta conversa`
+                    : "Você está online neste navegador · mensagens sincronizadas entre abas abertas";
+            } catch (error) {
+                presenceStatus.textContent = "Presença indisponível neste navegador.";
+                console.error("Falha ao carregar a presença da conversa.", error);
+            }
+        }
+
+        function updatePresence() {
+            try {
+                const activePresence = Object.fromEntries(getActivePresence());
+                activePresence[presenceSessionId] = {
+                    name: currentSenderName,
+                    conversationId,
+                    updatedAt: Date.now()
+                };
+                localStorage.setItem(presenceStorageKey, JSON.stringify(activePresence));
+                renderPresence();
+            } catch (error) {
+                presenceStatus.textContent = "Não foi possível atualizar a presença neste navegador.";
+                console.error("Falha ao atualizar a presença da conversa.", error);
+            }
+        }
+
+        updatePresence();
+        presenceTimer = window.setInterval(updatePresence, 5000);
+        window.addEventListener("storage", (event) => {
+            if (event.key === presenceStorageKey) {
+                renderPresence();
+                return;
+            }
+            if (event.key !== conversationStorageKey) {
+                return;
+            }
+
+            try {
+                allConversations = JSON.parse(event.newValue || "{}");
+                if (!allConversations || typeof allConversations !== "object" || Array.isArray(allConversations)) {
+                    throw new Error("As conversas sincronizadas estão em um formato inválido.");
+                }
+                const savedMessages = allConversations[conversationId];
+                messages = prepareExpiringMessages(savedMessages === undefined ? [] : savedMessages).messages;
+                allConversations = { ...allConversations, [conversationId]: messages };
+                renderChatMessages(messages);
+                scheduleChatMessageExpiry();
+                chatStatus.textContent = "";
+            } catch (error) {
+                chatStatus.textContent = "Não foi possível sincronizar as mensagens desta conversa.";
+                console.error("Falha ao sincronizar mensagens entre abas.", error);
+            }
+        });
+
+        window.addEventListener("beforeunload", () => {
+            window.clearInterval(presenceTimer);
+            try {
+                const activePresence = Object.fromEntries(getActivePresence());
+                delete activePresence[presenceSessionId];
+                localStorage.setItem(presenceStorageKey, JSON.stringify(activePresence));
+            } catch (error) {
+                console.error("Falha ao encerrar a presença da conversa.", error);
+            }
+        });
 
         function scheduleChatMessageExpiry() {
             window.clearTimeout(chatExpiryTimer);
@@ -1592,24 +1980,29 @@ if (teamConversationList) {
                 return;
             }
 
-            const retainedMessages = messages.filter((savedMessage) => Date.now() - savedMessage.sentAt < MESSAGE_RETENTION_MS);
-            const updatedMessages = [...retainedMessages, { text: message, sentAt: Date.now() }];
-            const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
             try {
+                const latestConversations = JSON.parse(localStorage.getItem(conversationStorageKey) || "{}");
+                if (!latestConversations || typeof latestConversations !== "object" || Array.isArray(latestConversations)) {
+                    throw new Error("As conversas salvas estão em um formato inválido.");
+                }
+                const latestMessages = prepareExpiringMessages(latestConversations[conversationId] || []).messages;
+                const updatedMessages = [
+                    ...latestMessages,
+                    { text: message, sender: currentSenderName, sentAt: Date.now() }
+                ];
+                const updatedConversations = { ...latestConversations, [conversationId]: updatedMessages };
                 localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
+                allConversations = updatedConversations;
+                messages = updatedMessages;
+                renderChatMessages(messages);
+                scheduleChatMessageExpiry();
+                chatStatus.textContent = "";
+                chatForm.reset();
+                chatInput.focus();
             } catch (error) {
                 chatStatus.textContent = "Não foi possível enviar a mensagem neste navegador.";
                 console.error("Falha ao enviar mensagem na conversa da equipe.", error);
-                return;
             }
-
-            allConversations = updatedConversations;
-            messages = updatedMessages;
-            renderChatMessages(messages);
-            scheduleChatMessageExpiry();
-            chatStatus.textContent = "";
-            chatForm.reset();
-            chatInput.focus();
         });
     } else if (conversationParams.get("conversa")) {
         emptyChatPrompt.textContent = conversationParams.get("tipo") === "amizade"
@@ -1634,19 +2027,33 @@ if (settingsForm) {
         console.error("Falha ao carregar as configurações do perfil.", error);
     }
 
-    settingsForm.addEventListener("submit", (event) => {
+    settingsForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const formData = new FormData(settingsForm);
+        const password = String(formData.get("password") || "");
+        if (password && password.length < PASSWORD_MIN_LENGTH) {
+            status.textContent = `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`;
+            return;
+        }
 
         try {
             const settings = {
                 ...savedProfileSettings,
-                ...Object.fromEntries(new FormData(settingsForm))
+                name: String(formData.get("name") || "").trim(),
+                email: String(formData.get("email") || "").trim()
             };
+            if (password) {
+                Object.assign(settings, await createPasswordCredentials(password));
+            }
             localStorage.setItem("blacklime-settings", JSON.stringify(settings));
+            savedProfileSettings = settings;
             updateSidebarProfile(settings.name, settings.position);
-            status.textContent = "Alterações salvas neste navegador.";
+            settingsForm.elements.password.value = "";
+            status.textContent = password
+                ? "Alterações e senha salvas neste navegador."
+                : "Alterações salvas neste navegador.";
         } catch (error) {
-            status.textContent = "Não foi possível salvar as alterações neste navegador.";
+            status.textContent = "Não foi possível salvar as alterações ou proteger a senha neste navegador.";
             console.error("Falha ao salvar as configurações do perfil.", error);
         }
     });

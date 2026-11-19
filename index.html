@@ -63,6 +63,20 @@
                 <h1 id="pageTitle">Comece por aqui</h1>
             </div>
             <div class="topbar-actions">
+                <div class="notification-control">
+                    <button class="notification-button" id="notificationButton" type="button" aria-label="Notificações" aria-expanded="false" aria-controls="notificationPanel">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+                        <span class="notification-count" id="notificationCount" hidden></span>
+                    </button>
+                    <section class="notification-panel" id="notificationPanel" aria-label="Notificações" hidden>
+                        <div class="notification-panel-header">
+                            <h2>Notificações</h2>
+                            <button class="notification-close-button" id="closeNotifications" type="button" aria-label="Fechar notificações">&times;</button>
+                        </div>
+                        <p class="notification-status" id="notificationStatus" role="status" aria-live="polite"></p>
+                        <div class="notification-list" id="notificationList" aria-live="polite"></div>
+                    </section>
+                </div>
                 <button class="primary-button" id="createTeamButton" type="button">
                     <span aria-hidden="true">+</span> Adicionar mensagem
                 </button>
