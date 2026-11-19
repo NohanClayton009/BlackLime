@@ -401,8 +401,6 @@ const pages = {
                     <dl class="profile-details-list">
                         <div><dt>Nome completo</dt><dd id="profileDetailName">Nohan Silva</dd></div>
                         <div><dt>E-mail</dt><dd id="profileDetailEmail">nohan@example.com</dd></div>
-                        <div><dt>Cargo</dt><dd id="profileDetailRole">Dono</dd></div>
-                        <div><dt>Empresa</dt><dd><a class="profile-company-link" id="profileDetailCompany" href="index.html?pagina=empresa">Black Lime</a></dd></div>
                     </dl>
                     <a class="secondary-button profile-owner-link" id="profileOwnerLink" href="index.html?pagina=dono" hidden>Abrir página do Dono</a>
                     <p class="profile-page-status" id="profilePageStatus" role="status" aria-live="polite"></p>
@@ -488,9 +486,6 @@ if (profilePageName) {
         const email = typeof savedProfileSettings.email === "string" && savedProfileSettings.email.trim()
             ? savedProfileSettings.email.trim()
             : "nohan@example.com";
-        const company = typeof savedProfileSettings.company === "string" && savedProfileSettings.company.trim()
-            ? savedProfileSettings.company.trim()
-            : "Black Lime";
         const role = typeof savedProfileSettings.position === "string" && savedProfileSettings.position.trim()
             ? savedProfileSettings.position.trim()
             : DEFAULT_PROFILE_ROLE;
@@ -502,8 +497,6 @@ if (profilePageName) {
         document.querySelector("#profilePageRole").textContent = role;
         document.querySelector("#profileDetailName").textContent = name;
         document.querySelector("#profileDetailEmail").textContent = email;
-        document.querySelector("#profileDetailRole").textContent = role;
-        document.querySelector("#profileDetailCompany").textContent = company;
         document.querySelector("#profileOwnerLink").hidden = role !== "Dono";
     }
 }
