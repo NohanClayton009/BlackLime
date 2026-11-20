@@ -27,6 +27,14 @@ async function apiRequest(path, options = {}) {
     return response.json();
 }
 
+function getDirectConversationId(firstEmail, secondEmail) {
+    const participants = [firstEmail, secondEmail]
+        .map((email) => email.trim().toLowerCase())
+        .sort()
+        .map((email) => encodeURIComponent(email));
+    return `direct:${participants.join(":")}`;
+}
+
 function applyTheme(theme) {
     const selectedTheme = theme === "light" ? "light" : "dark";
     document.body.dataset.theme = selectedTheme;
@@ -561,6 +569,7 @@ const pages = {
                     <p class="team-conversation-list-status" id="teamConversationListStatus" role="status" aria-live="polite"></p>
                     <div class="team-conversation-list" id="teamConversationList"></div>
                     <p class="panel-kicker friend-conversation-kicker">AMIZADES</p>
+                    <p class="messaging-help">Para conversar, configure seu e-mail no perfil e adicione a pessoa em Equipe &gt; Amizades. Ambos precisam usar o mesmo servidor.</p>
                     <p class="team-conversation-list-status" id="friendConversationListStatus" role="status" aria-live="polite"></p>
                     <div class="team-conversation-list" id="friendConversationList"></div>
                 </aside>
@@ -570,6 +579,11 @@ const pages = {
                         <div class="team-chat-header">
                             <h2 id="teamConversationTitle"></h2>
                             <p id="teamConversationMeta"></p>
+                            <div class="shared-room-controls" id="sharedRoomControls" hidden>
+                                <button class="secondary-button" id="copyRoomLink" type="button">Copiar link da sala</button>
+                                <p id="sharedRoomStatus" role="status" aria-live="polite"></p>
+                            </div>
+                            <p class="message-server-status" id="messageServerStatus" data-state="connecting" role="status" aria-live="polite">Conectando ao servidor de mensagens...</p>
                             <p class="team-presence-status" id="teamPresenceStatus" role="status" aria-live="polite"></p>
                             <p class="message-retention-note">As mensagens são excluídas automaticamente 24 horas após o envio.</p>
                         </div>
@@ -679,6 +693,16 @@ const isSignupDialogOpen = requestedPage === "cadastro" && hasSavedProfile;
 const currentPage = isSignupDialogOpen
     ? "inicio"
     : (!hasSavedProfile && requestedPage !== "acesso" ? "acesso" : requestedPage || "inicio");
+if (currentPage === "mensagens" && !pageParams.get("conversa")) {
+    let sala = pageParams.get("sala");
+    if (!sala) {
+        sala = Math.random().toString(36).slice(2, 8);
+        const roomUrl = new URL(window.location.href);
+        roomUrl.searchParams.set("sala", sala);
+        window.history.replaceState(null, "", roomUrl);
+        pageParams.set("sala", sala);
+    }
+}
 const page = pages[currentPage];
 const createTeamButton = document.querySelector("#createTeamButton");
 
@@ -1455,9 +1479,7 @@ if (ownerMessageForm) {
     const ownerMessageText = ownerMessageForm.elements.message;
     const ownerMessageStatus = document.querySelector("#ownerMessageStatus");
     const ownerMessageList = document.querySelector("#ownerMessageList");
-    const ownerMessageSubmit = ownerMessageForm.querySelector('button[type="submit"]');
     let ownerMessages = [];
-    let messageStorageAvailable = true;
     let ownerMessageExpiryTimer;
 
     function renderOwnerMessages() {
@@ -1553,13 +1575,13 @@ if (ownerMessageForm) {
             scheduleOwnerMessageExpiry();
         })
         .catch((error) => {
-            messageStorageAvailable = false;
-            ownerMessageSubmit.disabled = true;
-            ownerMessageStatus.textContent = "Não foi possível conectar ao servidor de mensagens.";
             console.error("Falha ao carregar os comunicados do dono.", error);
         });
 
     const ownerEventSource = new EventSource("/api/owner-events");
+    ownerEventSource.addEventListener("open", () => {
+        ownerMessageStatus.textContent = "";
+    });
     ownerEventSource.addEventListener("message", (event) => {
         try {
             const update = JSON.parse(event.data);
@@ -1570,14 +1592,13 @@ if (ownerMessageForm) {
             console.error("Falha ao sincronizar comunicados do dono.", error);
         }
     });
+    ownerEventSource.addEventListener("error", () => {
+        ownerMessageStatus.textContent = "Reconectando ao servidor de mensagens...";
+    });
     window.addEventListener("beforeunload", () => ownerEventSource.close());
 
     ownerMessageForm.addEventListener("submit", (event) => {
         event.preventDefault();
-        if (!messageStorageAvailable) {
-            return;
-        }
-
         const message = ownerMessageText.value.trim();
         if (!message) {
             ownerMessageStatus.textContent = "Escreva uma mensagem antes de publicar.";
@@ -1624,6 +1645,7 @@ if (teamConversationList) {
     const emptyChatPrompt = document.querySelector("#emptyChatPrompt");
     const chatTitle = document.querySelector("#teamConversationTitle");
     const chatMeta = document.querySelector("#teamConversationMeta");
+    const messageServerStatus = document.querySelector("#messageServerStatus");
     const presenceStatus = document.querySelector("#teamPresenceStatus");
     const chatMessages = document.querySelector("#teamChatMessages");
     const chatStatus = document.querySelector("#teamChatStatus");
@@ -1765,18 +1787,57 @@ if (teamConversationList) {
             friend.email.localeCompare(conversationParams.get("conversa") || "", "pt-BR", { sensitivity: "base" }) === 0
         )
         : null;
+    const sharedRoomId = !conversationParams.get("conversa") ? conversationParams.get("sala") : null;
+    const currentUserEmail = typeof savedProfileSettings.email === "string"
+        ? savedProfileSettings.email.trim().toLowerCase()
+        : "";
+    const selectedFriendEmail = selectedFriend ? selectedFriend.email.trim().toLowerCase() : "";
+    const directMessageSetupError = selectedFriend && !currentUserEmail
+        ? "Configure seu e-mail no perfil para iniciar uma conversa."
+        : selectedFriend && currentUserEmail === selectedFriendEmail
+            ? "Adicione o e-mail de outra pessoa para iniciar uma conversa."
+            : null;
 
-    if (selectedTeam || selectedFriend) {
+    if (directMessageSetupError && !sharedRoomId) {
         emptyChatPrompt.hidden = true;
         chatArea.hidden = false;
-        const conversationId = selectedFriend ? selectedFriend.email.toLocaleLowerCase("pt-BR") : selectedTeam.name;
+        chatTitle.textContent = selectedFriend.name;
+        chatMeta.textContent = `${selectedFriend.role || "Amizade"} · ${selectedFriend.email}`;
+        messageServerStatus.hidden = true;
+        chatStatus.textContent = directMessageSetupError;
+        chatInput.disabled = true;
+        chatForm.querySelector('button[type="submit"]').disabled = true;
+    } else if (sharedRoomId || selectedTeam || selectedFriend) {
+        emptyChatPrompt.hidden = true;
+        chatArea.hidden = false;
+        const conversationId = sharedRoomId || (selectedFriend
+            ? getDirectConversationId(currentUserEmail, selectedFriendEmail)
+            : selectedTeam.name);
         const conversationStorageKey = selectedFriend
             ? "blacklime-friend-conversations"
             : "blacklime-team-conversations";
-        chatTitle.textContent = selectedFriend ? selectedFriend.name : selectedTeam.name;
+        chatTitle.textContent = sharedRoomId
+            ? `Sala ${sharedRoomId}`
+            : selectedFriend ? selectedFriend.name : selectedTeam.name;
         chatMeta.textContent = selectedFriend
             ? `${selectedFriend.role || "Amizade"} · ${selectedFriend.email}`
-            : `Líder: ${selectedTeam.leader} · ${selectedTeam.members.length} integrante${selectedTeam.members.length === 1 ? "" : "s"}`;
+            : selectedTeam
+                ? `Líder: ${selectedTeam.leader} · ${selectedTeam.members.length} integrante${selectedTeam.members.length === 1 ? "" : "s"}`
+                : "Compartilhe o link desta sala para conversar com outras pessoas.";
+        const sharedRoomControls = document.querySelector("#sharedRoomControls");
+        if (sharedRoomId) {
+            sharedRoomControls.hidden = false;
+            document.querySelector("#copyRoomLink").addEventListener("click", async () => {
+                const sharedRoomStatus = document.querySelector("#sharedRoomStatus");
+                try {
+                    await navigator.clipboard.writeText(window.location.href);
+                    sharedRoomStatus.textContent = "Link da sala copiado.";
+                } catch (error) {
+                    sharedRoomStatus.textContent = "Não foi possível copiar. Copie o link pela barra de endereço.";
+                    console.error("Falha ao copiar o link da sala.", error);
+                }
+            });
+        }
         let allConversations = {};
         let messages = [];
         let chatStorageAvailable = true;
@@ -1923,9 +1984,6 @@ if (teamConversationList) {
                 chatStatus.textContent = "";
             })
             .catch((error) => {
-                chatStatus.textContent = "Não foi possível conectar ao servidor de mensagens.";
-                chatInput.disabled = true;
-                chatForm.querySelector('button[type="submit"]').disabled = true;
                 console.error("Falha ao carregar a conversa da equipe.", error);
             });
 
@@ -1944,8 +2002,13 @@ if (teamConversationList) {
                 console.error("Falha ao processar uma atualização da conversa.", error);
             }
         });
+        chatEventSource.addEventListener("open", () => {
+            messageServerStatus.dataset.state = "connected";
+            messageServerStatus.textContent = "Servidor de mensagens conectado";
+        });
         chatEventSource.addEventListener("error", () => {
-            chatStatus.textContent = "Reconectando ao servidor de mensagens...";
+            messageServerStatus.dataset.state = "reconnecting";
+            messageServerStatus.textContent = "Reconectando ao servidor de mensagens...";
         });
         window.addEventListener("beforeunload", () => chatEventSource.close());
 

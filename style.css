@@ -2405,6 +2405,13 @@ h1 {
     font-size: 11px;
 }
 
+.messaging-help {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
 .team-conversation-list-status:empty,
 .team-chat-status:empty {
     display: none;
@@ -2464,6 +2471,53 @@ h1 {
     margin: 5px 0 0;
     color: var(--muted);
     font-size: 11px;
+}
+
+.shared-room-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.shared-room-controls .secondary-button {
+    width: auto;
+}
+
+.shared-room-controls p {
+    margin: 0;
+}
+
+.message-server-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.message-server-status::before {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    content: "";
+}
+
+.message-server-status[data-state="connected"] {
+    color: var(--lime);
+}
+
+.message-server-status[data-state="connected"]::before {
+    background: var(--lime);
+}
+
+.message-server-status[data-state="reconnecting"] {
+    color: #ffca60;
+}
+
+.message-server-status[data-state="reconnecting"]::before {
+    background: #ffca60;
 }
 
 .team-presence-status {

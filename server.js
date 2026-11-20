@@ -7,6 +7,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, "data", "blacklime.json");
 const RETENTION_MS = 24 * 60 * 60 * 1000;
+const EVENT_STREAM_HEARTBEAT_MS = 20 * 1000;
 const subscribers = new Map();
 const ownerSubscribers = new Set();
 
@@ -122,12 +123,17 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 400, { error: "Informe a conversa." });
       return;
     }
+    database.conversations[conversationId] = pruneMessages(database.conversations[conversationId]);
     response.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
-    response.write(": connected\n\n");
+    response.write("retry: 3000\n");
+    response.write(`data: ${JSON.stringify({
+      conversationId,
+      messages: database.conversations[conversationId] || []
+    })}\n\n`);
     const subscriberId = `${conversationId}:${Date.now()}:${Math.random()}`;
     subscribers.set(subscriberId, {
       conversationId,
@@ -140,12 +146,14 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === "/api/owner-events") {
+    database.ownerMessages = pruneMessages(database.ownerMessages);
     response.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
-    response.write(": connected\n\n");
+    response.write("retry: 3000\n");
+    response.write(`data: ${JSON.stringify({ messages: database.ownerMessages })}\n\n`);
     const subscriber = { write: (message) => response.write(message) };
     ownerSubscribers.add(subscriber);
     response.on("close", () => ownerSubscribers.delete(subscriber));
@@ -305,6 +313,14 @@ setInterval(() => {
   if (changed) saveDatabase();
 }, 60 * 1000).unref();
 
+setInterval(() => {
+  for (const subscriber of subscribers.values()) {
+    subscriber.write(": keep-alive\n\n");
+  }
+  for (const subscriber of ownerSubscribers) {
+    subscriber.write(": keep-alive\n\n");
+  }
+}, EVENT_STREAM_HEARTBEAT_MS).unref();
 server.listen(PORT, HOST, () => {
   console.log(`Black Lime disponível em http://${HOST}:${PORT}`);
 });
