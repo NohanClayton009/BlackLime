@@ -129,6 +129,7 @@ const server = http.createServer(async (request, response) => {
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
+    response.setTimeout(0);
     response.write("retry: 3000\n");
     response.write(`data: ${JSON.stringify({
       conversationId,
@@ -152,6 +153,7 @@ const server = http.createServer(async (request, response) => {
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
+    response.setTimeout(0);
     response.write("retry: 3000\n");
     response.write(`data: ${JSON.stringify({ messages: database.ownerMessages })}\n\n`);
     const subscriber = { write: (message) => response.write(message) };
