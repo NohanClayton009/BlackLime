@@ -12,6 +12,21 @@ const THEME_STORAGE_KEY = "blacklime-theme";
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_HASH_ITERATIONS = 210000;
 
+async function apiRequest(path, options = {}) {
+    const response = await fetch(path, {
+        ...options,
+        headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        }
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "A operação não pôde ser concluída.");
+    }
+    return response.json();
+}
+
 function applyTheme(theme) {
     const selectedTheme = theme === "light" ? "light" : "dark";
     document.body.dataset.theme = selectedTheme;
@@ -1477,19 +1492,15 @@ if (ownerMessageForm) {
             deleteButton.textContent = "Excluir";
             deleteButton.setAttribute("aria-label", "Excluir mensagem publicada");
             deleteButton.addEventListener("click", () => {
-                ownerMessages = ownerMessages.filter((_, index) => index !== messageIndex);
-
-                try {
-                    localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
-                } catch (error) {
+                apiRequest("/api/owner-messages", {
+                    method: "DELETE",
+                    body: JSON.stringify({ index: messageIndex })
+                }).then(() => {
+                    ownerMessageStatus.textContent = "Mensagem excluída.";
+                }).catch((error) => {
                     ownerMessageStatus.textContent = "Não foi possível excluir a mensagem.";
                     console.error("Falha ao excluir um comunicado do dono.", error);
-                    return;
-                }
-
-                renderOwnerMessages();
-                scheduleOwnerMessageExpiry();
-                ownerMessageStatus.textContent = "Mensagem excluída.";
+                });
             });
 
             const editButton = document.createElement("button");
@@ -1499,20 +1510,15 @@ if (ownerMessageForm) {
             editButton.setAttribute("aria-label", "Editar mensagem publicada");
             editButton.addEventListener("click", () => {
                 openMessageEditor(ownerMessages[messageIndex].text, (updatedText) => {
-                    ownerMessages = ownerMessages.map((savedMessage, index) =>
-                        index === messageIndex ? { ...savedMessage, text: updatedText } : savedMessage
-                    );
-
-                    try {
-                        localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
-                    } catch (error) {
+                    apiRequest("/api/owner-messages", {
+                        method: "PUT",
+                        body: JSON.stringify({ index: messageIndex, text: updatedText })
+                    }).then(() => {
+                        ownerMessageStatus.textContent = "Mensagem editada.";
+                    }).catch((error) => {
                         ownerMessageStatus.textContent = "Não foi possível editar a mensagem.";
                         console.error("Falha ao editar um comunicado do dono.", error);
-                        return false;
-                    }
-
-                    renderOwnerMessages();
-                    ownerMessageStatus.textContent = "Mensagem editada.";
+                    });
                     return true;
                 });
             });
@@ -1536,35 +1542,35 @@ if (ownerMessageForm) {
         ownerMessageExpiryTimer = window.setTimeout(() => {
             ownerMessages = ownerMessages.filter((message) => Date.now() - message.sentAt < MESSAGE_RETENTION_MS);
             renderOwnerMessages();
-
-            try {
-                localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
-            } catch (error) {
-                messageStorageAvailable = false;
-                ownerMessageSubmit.disabled = true;
-                ownerMessageStatus.textContent = "Não foi possível atualizar as mensagens expiradas.";
-                console.error("Falha ao remover comunicados expirados.", error);
-            }
-
             scheduleOwnerMessageExpiry();
         }, Math.max(0, nextExpiry - Date.now()));
     }
 
-    try {
-        const savedMessages = JSON.parse(localStorage.getItem("blacklime-owner-messages") || "[]");
-        const preparedMessages = prepareExpiringMessages(savedMessages);
-        ownerMessages = preparedMessages.messages;
-        if (preparedMessages.changed) {
-            localStorage.setItem("blacklime-owner-messages", JSON.stringify(ownerMessages));
+    apiRequest("/api/owner-messages")
+        .then((data) => {
+            ownerMessages = prepareExpiringMessages(data.messages || []).messages;
+            renderOwnerMessages();
+            scheduleOwnerMessageExpiry();
+        })
+        .catch((error) => {
+            messageStorageAvailable = false;
+            ownerMessageSubmit.disabled = true;
+            ownerMessageStatus.textContent = "Não foi possível conectar ao servidor de mensagens.";
+            console.error("Falha ao carregar os comunicados do dono.", error);
+        });
+
+    const ownerEventSource = new EventSource("/api/owner-events");
+    ownerEventSource.addEventListener("message", (event) => {
+        try {
+            const update = JSON.parse(event.data);
+            ownerMessages = prepareExpiringMessages(update.messages || []).messages;
+            renderOwnerMessages();
+            scheduleOwnerMessageExpiry();
+        } catch (error) {
+            console.error("Falha ao sincronizar comunicados do dono.", error);
         }
-        renderOwnerMessages();
-        scheduleOwnerMessageExpiry();
-    } catch (error) {
-        messageStorageAvailable = false;
-        ownerMessageSubmit.disabled = true;
-        ownerMessageStatus.textContent = "Não foi possível carregar as mensagens salvas neste navegador.";
-        console.error("Falha ao carregar os comunicados do dono.", error);
-    }
+    });
+    window.addEventListener("beforeunload", () => ownerEventSource.close());
 
     ownerMessageForm.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -1578,23 +1584,18 @@ if (ownerMessageForm) {
             return;
         }
 
-        ownerMessages = ownerMessages.filter((savedMessage) => Date.now() - savedMessage.sentAt < MESSAGE_RETENTION_MS);
-        const newMessage = { text: message, sentAt: Date.now() };
-        try {
-            localStorage.setItem("blacklime-owner-messages", JSON.stringify([...ownerMessages, newMessage]));
-        } catch (error) {
-            ownerMessageStatus.textContent = "Não foi possível salvar a mensagem neste navegador.";
+        apiRequest("/api/owner-messages", {
+            method: "POST",
+            body: JSON.stringify({ text: message })
+        }).then(() => {
+            ownerMessageForm.reset();
+            ownerMessagePanel.hidden = true;
+            ownerMessageStatus.textContent = "Mensagem publicada.";
+            createTeamButton.focus();
+        }).catch((error) => {
+            ownerMessageStatus.textContent = "Não foi possível publicar a mensagem.";
             console.error("Falha ao publicar um comunicado do dono.", error);
-            return;
-        }
-
-        ownerMessages.push(newMessage);
-        renderOwnerMessages();
-        scheduleOwnerMessageExpiry();
-        ownerMessageForm.reset();
-        ownerMessagePanel.hidden = true;
-        ownerMessageStatus.textContent = "Mensagem publicada.";
-        createTeamButton.focus();
+        });
     });
 
     document.querySelector("#closeOwnerMessageForm").addEventListener("click", () => {
@@ -1882,127 +1883,90 @@ if (teamConversationList) {
                 messages = messages.filter((message) => Date.now() - message.sentAt < MESSAGE_RETENTION_MS);
                 allConversations = { ...allConversations, [conversationId]: messages };
                 renderChatMessages(messages);
-
-                try {
-                    localStorage.setItem(conversationStorageKey, JSON.stringify(allConversations));
-                } catch (error) {
-                    chatStorageAvailable = false;
-                    chatInput.disabled = true;
-                    chatForm.querySelector('button[type="submit"]').disabled = true;
-                    chatStatus.textContent = "Não foi possível atualizar as mensagens expiradas.";
-                    console.error("Falha ao remover mensagens expiradas da conversa.", error);
-                }
-
                 scheduleChatMessageExpiry();
             }, Math.max(0, nextExpiry - Date.now()));
         }
 
         deleteChatMessage = (messageIndex) => {
-            if (!chatStorageAvailable) {
-                chatStatus.textContent = "Não é possível excluir mensagens neste navegador.";
-                return;
-            }
-
-            const updatedMessages = messages.filter((_, index) => index !== messageIndex);
-            const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
-            try {
-                localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
-            } catch (error) {
-                chatStatus.textContent = "Não foi possível excluir a mensagem neste navegador.";
+            apiRequest(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+                method: "DELETE",
+                body: JSON.stringify({ index: messageIndex })
+            }).then(() => {
+                chatStatus.textContent = "Mensagem excluída.";
+            }).catch((error) => {
+                chatStatus.textContent = "Não foi possível excluir a mensagem.";
                 console.error("Falha ao excluir uma mensagem da conversa.", error);
-                return;
-            }
-
-            allConversations = updatedConversations;
-            messages = updatedMessages;
-            renderChatMessages(messages);
-            scheduleChatMessageExpiry();
-            chatStatus.textContent = "Mensagem excluída.";
+            });
         };
 
         editChatMessage = (messageIndex) => {
-            if (!chatStorageAvailable) {
-                chatStatus.textContent = "Não é possível editar mensagens neste navegador.";
-                return;
-            }
-
             openMessageEditor(messages[messageIndex].text, (updatedText) => {
-                const updatedMessages = messages.map((savedMessage, index) =>
-                    index === messageIndex ? { ...savedMessage, text: updatedText } : savedMessage
-                );
-                const updatedConversations = { ...allConversations, [conversationId]: updatedMessages };
-                try {
-                    localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
-                } catch (error) {
-                    chatStatus.textContent = "Não foi possível editar a mensagem neste navegador.";
+                apiRequest(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ index: messageIndex, text: updatedText })
+                }).then(() => {
+                    chatStatus.textContent = "Mensagem editada.";
+                }).catch((error) => {
+                    chatStatus.textContent = "Não foi possível editar a mensagem.";
                     console.error("Falha ao editar uma mensagem da conversa.", error);
-                    return false;
-                }
-
-                allConversations = updatedConversations;
-                messages = updatedMessages;
-                renderChatMessages(messages);
-                chatStatus.textContent = "Mensagem editada.";
+                });
                 return true;
             });
         };
 
-        try {
-            allConversations = JSON.parse(localStorage.getItem(conversationStorageKey) || "{}");
-            if (!allConversations || typeof allConversations !== "object" || Array.isArray(allConversations)) {
-                throw new Error("As conversas salvas estão em um formato inválido.");
+        apiRequest(`/api/conversations/${encodeURIComponent(conversationId)}`)
+            .then((data) => {
+                messages = prepareExpiringMessages(data.messages || []).messages;
+                allConversations = { [conversationId]: messages };
+                renderChatMessages(messages);
+                scheduleChatMessageExpiry();
+                chatStatus.textContent = "";
+            })
+            .catch((error) => {
+                chatStatus.textContent = "Não foi possível conectar ao servidor de mensagens.";
+                chatInput.disabled = true;
+                chatForm.querySelector('button[type="submit"]').disabled = true;
+                console.error("Falha ao carregar a conversa da equipe.", error);
+            });
+
+        const chatEventSource = new EventSource(
+            `/api/events?conversa=${encodeURIComponent(conversationId)}`
+        );
+        chatEventSource.addEventListener("message", (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                messages = prepareExpiringMessages(update.messages || []).messages;
+                allConversations = { [conversationId]: messages };
+                renderChatMessages(messages);
+                scheduleChatMessageExpiry();
+                chatStatus.textContent = "";
+            } catch (error) {
+                console.error("Falha ao processar uma atualização da conversa.", error);
             }
-            const savedConversationMessages = allConversations[conversationId];
-            const preparedMessages = prepareExpiringMessages(savedConversationMessages === undefined ? [] : savedConversationMessages);
-            messages = preparedMessages.messages;
-            allConversations = { ...allConversations, [conversationId]: messages };
-            if (preparedMessages.changed) {
-                localStorage.setItem(conversationStorageKey, JSON.stringify(allConversations));
-            }
-            renderChatMessages(messages);
-            scheduleChatMessageExpiry();
-        } catch (error) {
-            chatStorageAvailable = false;
-            chatInput.disabled = true;
-            chatForm.querySelector('button[type="submit"]').disabled = true;
-            chatStatus.textContent = "Não foi possível carregar as mensagens salvas neste navegador.";
-            console.error("Falha ao carregar a conversa da equipe.", error);
-        }
+        });
+        chatEventSource.addEventListener("error", () => {
+            chatStatus.textContent = "Reconectando ao servidor de mensagens...";
+        });
+        window.addEventListener("beforeunload", () => chatEventSource.close());
 
         chatForm.addEventListener("submit", (event) => {
             event.preventDefault();
-            if (!chatStorageAvailable) {
-                return;
-            }
-
             const message = chatInput.value.trim();
             if (!message) {
                 return;
             }
 
-            try {
-                const latestConversations = JSON.parse(localStorage.getItem(conversationStorageKey) || "{}");
-                if (!latestConversations || typeof latestConversations !== "object" || Array.isArray(latestConversations)) {
-                    throw new Error("As conversas salvas estão em um formato inválido.");
-                }
-                const latestMessages = prepareExpiringMessages(latestConversations[conversationId] || []).messages;
-                const updatedMessages = [
-                    ...latestMessages,
-                    { text: message, sender: currentSenderName, sentAt: Date.now() }
-                ];
-                const updatedConversations = { ...latestConversations, [conversationId]: updatedMessages };
-                localStorage.setItem(conversationStorageKey, JSON.stringify(updatedConversations));
-                allConversations = updatedConversations;
-                messages = updatedMessages;
-                renderChatMessages(messages);
-                scheduleChatMessageExpiry();
+            apiRequest(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+                method: "POST",
+                body: JSON.stringify({ text: message, sender: currentSenderName })
+            }).then(() => {
                 chatStatus.textContent = "";
                 chatForm.reset();
                 chatInput.focus();
-            } catch (error) {
-                chatStatus.textContent = "Não foi possível enviar a mensagem neste navegador.";
+            }).catch((error) => {
+                chatStatus.textContent = "Não foi possível enviar a mensagem.";
                 console.error("Falha ao enviar mensagem na conversa da equipe.", error);
-            }
+            });
         });
     } else if (conversationParams.get("conversa")) {
         emptyChatPrompt.textContent = conversationParams.get("tipo") === "amizade"
